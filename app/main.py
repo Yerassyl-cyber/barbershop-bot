@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Header, HTTPException
 
 from .config import WEBHOOK_SECRET
 from .telegram_api import init_client, close_client, tg_answer_callback
-from .handlers import handle_start, handle_callback, handle_text
+from .handlers import handle_start, handle_callback
 
 app = FastAPI()
 
