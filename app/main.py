@@ -54,6 +54,9 @@ async def barber_webhook(
         if text.startswith("/start"):
             await handle_start(chat_id)
         else:
-            await handle_text(chat_id, text)  
+        # Қазір сенде reply-keyboard жоқ, бәрі inline.
+        # Сондықтан жай менюді қайта көрсетеміз:
+               await handle_start(chat_id)
+
 
     return {"ok": True}
