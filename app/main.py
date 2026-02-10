@@ -39,30 +39,29 @@ async def barber_webhook(
     if cb:
         chat_id = cb["message"]["chat"]["id"]
         data = cb.get("data", "")
-
         if data == "menu:prices":
             await tg_send(
                 chat_id,
-            "Бағалар:\n- Стрижка: 4000\n- Борода: 3000\n- Стрижка+борода: 6500"
-        )
+                "Бағалар:\n- Стрижка: 4000\n- Борода: 3000\n- Стрижка+борода: 6500"
+            )   
 
         elif data == "menu:book":
             kb = {
-            "inline_keyboard": [
-                [{"text": "✂️ Асан", "callback_data": "master:1"}],
-                [{"text": "✂️ Дәурен", "callback_data": "master:2"}],
-                [{"text": "⬅️ Артқа", "callback_data": "menu:back"}],
-            ]
-        }
+                "inline_keyboard": [
+                    [{"text": "✂️ Асан", "callback_data": "master:1"}],
+                    [{"text": "✂️ Дәурен", "callback_data": "master:2"}],
+                    [{"text": "⬅️ Артқа", "callback_data": "menu:back"}],
+                ]
+            }
             await tg_send(chat_id, "Мастерді таңдаңыз:", reply_markup=kb)
 
         elif data == "menu:back":
             kb = {
                 "inline_keyboard": [
-                [{"text": "📅 Запись", "callback_data": "menu:book"}],
-                [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
-            ]
-        }
+                   [{"text": "📅 Запись", "callback_data": "menu:book"}],
+                   [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
+                 ]
+            }
             await tg_send(chat_id, "Таңдаңыз:", reply_markup=kb)
 
         elif data.startswith("master:"):
