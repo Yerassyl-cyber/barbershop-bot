@@ -1,6 +1,6 @@
 from .telegram_api import tg_send
 from .state import get_draft, clear_draft
-
+from .config import ADMIN_CHAT_ID
 MASTERS = {
     "1": "Асан",
     "2": "Дәурен",
@@ -139,10 +139,36 @@ async def handle_callback(chat_id: int, data: str):
         return
 
     if data == "confirm:yes":
-        # TODO: осы жерде кейін DB/Google Sheet-ке сақтаймыз
-        await tg_send(chat_id, "✅ Жазылдыңыз! Админ жақында хабарласады.\n\nҚайта меню:", reply_markup=main_menu_kb())
+        master_name = MASTERS.get(draft.master_id or "", "?")
+        service_name, price = SERVICES.get(draft.service_id or "", ("?", 0))
+
+    # Клиентке жауап
+        await tg_send(
+            chat_id,
+            "✅ Жазылдыңыз! Админ жақында хабарласады.\n\nҚайта меню:",
+            reply_markup=main_menu_kb()
+            )   
+
+    # ---- Админге хабарлама ----
+        if ADMIN_CHAT_ID != 0:
+            admin_text = (
+                "🆕 Жаңа запись!\n\n"
+                f"👤 Клиент chat_id: {chat_id}\n"
+                f"✂️ Мастер: {master_name}\n"
+                f"🛠 Қызмет: {service_name}\n"
+                f"📅 Күн: {draft.day}\n"
+                f"⏰ Уақыт: {draft.time}\n"
+                f"💳 Баға: {price} тг"
+                )
+
+            await tg_send(ADMIN_CHAT_ID, admin_text)
+        else:
+            print("⚠ ADMIN_CHAT_ID орнатылмаған!")
+
         clear_draft(chat_id)
         return
+
+    
 
     if data == "confirm:no":
         await tg_send(chat_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())
