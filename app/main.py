@@ -5,6 +5,10 @@ from .telegram_api import init_client, close_client, tg_answer_callback
 from .handlers import handle_start, handle_callback
 
 app = FastAPI()
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 
 @app.on_event("startup")
 async def on_startup():
