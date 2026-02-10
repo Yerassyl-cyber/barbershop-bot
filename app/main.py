@@ -3,6 +3,20 @@ import httpx
 from fastapi import FastAPI, Request, Header, HTTPException
 
 app = FastAPI()
+client: httpx.AsyncClient | None = None
+
+@app.on_event("startup")
+async def on_startup():
+    global client
+    client = httpx.AsyncClient(timeout=10)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    global client
+    if client:
+        await client.aclose()
+        client = None
+
 
 BOT_TOKEN = os.getenv("BARBER_BOT_TOKEN", "")
 WEBHOOK_SECRET = os.getenv("BARBER_WEBHOOK_SECRET", "")
@@ -20,9 +34,8 @@ async def tg_send(chat_id: int, text: str, reply_markup: dict | None = None):
     if reply_markup:
         payload["reply_markup"] = reply_markup
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.post(f"{TELEGRAM_API}/sendMessage", json=payload)
-        r.raise_for_status()
+    r = await client.post(f"{TELEGRAM_API}/sendMessage", json=payload)
+    r.raise_for_status()
 
 
 @app.post("/telegram/barber/webhook")
