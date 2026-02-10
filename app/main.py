@@ -41,10 +41,39 @@ async def barber_webhook(
         data = cb.get("data", "")
 
         if data == "menu:prices":
-            await tg_send(chat_id, "Бағалар:\n- Стрижка: 4000\n- Борода: 3000\n- Стрижка+борода: 6500")
+            await tg_send(
+                chat_id,
+            "Бағалар:\n- Стрижка: 4000\n- Борода: 3000\n- Стрижка+борода: 6500"
+        )
+
         elif data == "menu:book":
-            await tg_send(chat_id, "Ок! Енді мастер таңдаймыз (келесі қадамда).")
+            kb = {
+            "inline_keyboard": [
+                [{"text": "✂️ Асан", "callback_data": "master:1"}],
+                [{"text": "✂️ Дәурен", "callback_data": "master:2"}],
+                [{"text": "⬅️ Артқа", "callback_data": "menu:back"}],
+            ]
+        }
+            await tg_send(chat_id, "Мастерді таңдаңыз:", reply_markup=kb)
+
+        elif data == "menu:back":
+            kb = {
+                "inline_keyboard": [
+                [{"text": "📅 Запись", "callback_data": "menu:book"}],
+                [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
+            ]
+        }
+            await tg_send(chat_id, "Таңдаңыз:", reply_markup=kb)
+
+        elif data.startswith("master:"):
+            master_id = data.split(":")[1]
+            await tg_send(
+                chat_id,
+                f"Таңдалды ✅ Мастер #{master_id}. Келесі қадам: қызмет таңдау."
+                )
+
         return {"ok": True}
+
 
     msg = update.get("message")
     if msg and "text" in msg:
