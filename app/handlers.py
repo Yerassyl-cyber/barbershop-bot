@@ -3,6 +3,8 @@ from .state import get_draft, clear_draft
 from .config import ADMIN_CHAT_ID
 import asyncio
 from .db import insert_booking, is_slot_taken
+from .telegram_api import tg_send, tg_edit
+
 
 MASTERS = {
     "1": "Асан",
@@ -74,52 +76,54 @@ def confirm_kb():
 async def handle_start(chat_id: int):
     await tg_send(chat_id, "Сәлем! ✂️ SheberCut\n\nТаңдаңыз:", reply_markup=main_menu_kb())
 
-async def handle_prices(chat_id: int):
+async def handle_prices(chat_id: int, message_id: int):
     text = "Бағалар:\n"
     for k, (name, price) in SERVICES.items():
         text += f"- {name}: {price} тг\n"
-    await tg_send(chat_id, text)
+    await tg_edit(chat_id, message_id, text + "\n⬅️ Артқа қайтайық:", reply_markup=main_menu_kb())
 
-async def handle_callback(chat_id: int, data: str):
+
+async def handle_callback(chat_id: int, data: str, message_id: int):
     draft = get_draft(chat_id)
 
     if data == "menu:prices":
-        await handle_prices(chat_id)
+        await handle_prices(chat_id, message_id)   # ✅ edit арқылы
         return
+
 
     if data == "menu:book":
         clear_draft(chat_id)
-        await tg_send(chat_id, "Мастерді таңдаңыз:", reply_markup=masters_kb())
+        await tg_edit(chat_id, "Мастерді таңдаңыз:", reply_markup=masters_kb())
         return
 
     if data == "menu:back":
-        await tg_send(chat_id, "Таңдаңыз:", reply_markup=main_menu_kb())
+        await tg_edit(chat_id, "Таңдаңыз:", reply_markup=main_menu_kb())
         return
 
     if data.startswith("master:"):
         master_id = data.split(":")[1]
         draft.master_id = master_id
-        await tg_send(chat_id, f"Мастер: {MASTERS.get(master_id,'?')}\n\nҚызметті таңдаңыз:", reply_markup=services_kb())
+        await tg_edit(chat_id, f"Мастер: {MASTERS.get(master_id,'?')}\n\nҚызметті таңдаңыз:", reply_markup=services_kb())
         return
 
     if data.startswith("service:"):
         service_id = data.split(":")[1]
         draft.service_id = service_id
-        await tg_send(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
         return
 
     if data == "back:services":
-        await tg_send(chat_id, "Қызметті таңдаңыз:", reply_markup=services_kb())
+        await tg_edit(chat_id, "Қызметті таңдаңыз:", reply_markup=services_kb())
         return
 
     if data.startswith("day:"):
         day = data.split(":", 1)[1]
         draft.day = day
-        await tg_send(chat_id, "Уақытты таңдаңыз:", reply_markup=times_kb())
+        await tg_edit(chat_id, "Уақытты таңдаңыз:", reply_markup=times_kb())
         return
 
     if data == "back:days":
-        await tg_send(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
         return
 
     if data.startswith("time:"):
@@ -138,7 +142,7 @@ async def handle_callback(chat_id: int, data: str):
             f"💳 Баға: {price} тг\n\n"
             "Растаймыз ба?"
         )
-        await tg_send(chat_id, summary, reply_markup=confirm_kb())
+        await tg_edit(chat_id, summary, reply_markup=confirm_kb())
         return
 
     if data == "confirm:yes":
@@ -153,7 +157,7 @@ async def handle_callback(chat_id: int, data: str):
         draft.time or ""
         )
         if taken:
-           await tg_send(chat_id, "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
+           await tg_edit(chat_id, "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
            return
 
         # ✅ SQL-ға сақтаймыз (pyodbc sync болғандықтан thread)
@@ -186,7 +190,7 @@ async def handle_callback(chat_id: int, data: str):
             f"💳 Баға: {price} тг\n"
             f"Статус: pending"
         )
-        await tg_send(ADMIN_CHAT_ID, admin_text)
+        await tg_edit(ADMIN_CHAT_ID, admin_text)
     else:
         print("⚠ ADMIN_CHAT_ID орнатылмаған!")
 
@@ -197,8 +201,8 @@ async def handle_callback(chat_id: int, data: str):
     
 
     if data == "confirm:no":
-        await tg_send(chat_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())
+        await tg_edit(chat_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())
         clear_draft(chat_id)
         return
 
-    await tg_send(chat_id, "Түсінбедім. Мәзірден таңдаңыз:", reply_markup=main_menu_kb())
+    await tg_edit(chat_id, "Түсінбедім. Мәзірден таңдаңыз:", reply_markup=main_menu_kb())

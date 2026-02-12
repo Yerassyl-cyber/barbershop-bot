@@ -45,8 +45,10 @@ async def barber_webhook(
         await tg_answer_callback(cb["id"])
 
         chat_id = cb["message"]["chat"]["id"]
+        msg_id = cb["message"]["message_id"]   # ✅ осы керек
         data = cb.get("data", "")
-        await handle_callback(chat_id, data)
+        await handle_callback(chat_id, data, msg_id)
+
         return {"ok": True}
 
     msg = update.get("message")
