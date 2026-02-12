@@ -26,3 +26,15 @@ async def tg_answer_callback(callback_query_id: str, text: str | None = None):
         payload["text"] = text
     r = await client.post(f"{TELEGRAM_API}/answerCallbackQuery", json=payload)
     r.raise_for_status()
+
+async def tg_edit(chat_id: int, message_id: int, text: str, reply_markup: dict | None = None):
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    r = await client.post(f"{TELEGRAM_API}/editMessageText", json=payload)
+    r.raise_for_status()
+
+async def tg_delete(chat_id: int, message_id: int):
+    payload = {"chat_id": chat_id, "message_id": message_id}
+    r = await client.post(f"{TELEGRAM_API}/deleteMessage", json=payload)
+    r.raise_for_status()

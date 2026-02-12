@@ -3,7 +3,7 @@ from .state import get_draft, clear_draft
 from .config import ADMIN_CHAT_ID
 import asyncio
 from .db import insert_booking, is_slot_taken
-from .telegram_api import tg_send, tg_edit
+from .telegram_api import tg_edit
 
 
 MASTERS = {
