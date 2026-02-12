@@ -20,12 +20,19 @@ async def tg_send(chat_id: int, text: str, reply_markup: dict | None = None):
     r = await client.post(f"{TELEGRAM_API}/sendMessage", json=payload)
     r.raise_for_status()
 
+import httpx
+
 async def tg_answer_callback(callback_query_id: str, text: str | None = None):
     payload = {"callback_query_id": callback_query_id}
     if text:
         payload["text"] = text
-    r = await client.post(f"{TELEGRAM_API}/answerCallbackQuery", json=payload)
-    r.raise_for_status()
+    try:
+        r = await client.post(f"{TELEGRAM_API}/answerCallbackQuery", json=payload)
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        # 400 болса да бот құламасын
+        print("⚠️ answerCallbackQuery failed:", e.response.text)
+
 
 async def tg_edit(chat_id: int, message_id: int, text: str, reply_markup: dict | None = None):
     payload = {"chat_id": chat_id, "message_id": message_id, "text": text}
