@@ -93,37 +93,37 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
     if data == "menu:book":
         clear_draft(chat_id)
-        await tg_edit(chat_id, "Мастерді таңдаңыз:", reply_markup=masters_kb())
+        await tg_edit(chat_id, message_id, "Мастерді таңдаңыз:", reply_markup=masters_kb())
         return
 
     if data == "menu:back":
-        await tg_edit(chat_id, "Таңдаңыз:", reply_markup=main_menu_kb())
+        await tg_edit(chat_id, message_id,"Таңдаңыз:", reply_markup=main_menu_kb())
         return
 
     if data.startswith("master:"):
         master_id = data.split(":")[1]
         draft.master_id = master_id
-        await tg_edit(chat_id, f"Мастер: {MASTERS.get(master_id,'?')}\n\nҚызметті таңдаңыз:", reply_markup=services_kb())
+        await tg_edit(chat_id,message_id, f"Мастер: {MASTERS.get(master_id,'?')}\n\nҚызметті таңдаңыз:", reply_markup=services_kb())
         return
 
     if data.startswith("service:"):
         service_id = data.split(":")[1]
         draft.service_id = service_id
-        await tg_edit(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, message_id,"Күнді таңдаңыз:", reply_markup=days_kb())
         return
 
     if data == "back:services":
-        await tg_edit(chat_id, "Қызметті таңдаңыз:", reply_markup=services_kb())
+        await tg_edit(chat_id,message_id, "Қызметті таңдаңыз:", reply_markup=services_kb())
         return
 
     if data.startswith("day:"):
         day = data.split(":", 1)[1]
         draft.day = day
-        await tg_edit(chat_id, "Уақытты таңдаңыз:", reply_markup=times_kb())
+        await tg_edit(chat_id, message_id,"Уақытты таңдаңыз:", reply_markup=times_kb())
         return
 
     if data == "back:days":
-        await tg_edit(chat_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb())
         return
 
     if data.startswith("time:"):
@@ -172,15 +172,15 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         )
 
     # Клиентке жауап
-    await tg_send(
-        chat_id,
-        f"✅ Жазылдыңыз! (№{booking_id})\nАдмин жақында хабарласады.\n\nҚайта меню:",
-        reply_markup=main_menu_kb()
-    )
+        await tg_edit(
+            chat_id,message_id,
+            f"✅ Жазылдыңыз! (№{booking_id})\nАдмин жақында хабарласады.\n\nҚайта меню:",
+            reply_markup=main_menu_kb()
+            )
 
     # Админге хабарлама
-    if ADMIN_CHAT_ID != 0:
-        admin_text = (
+        if ADMIN_CHAT_ID != 0:
+            admin_text = (
             f"🆕 Жаңа запись! №{booking_id}\n\n"
             f"👤 Клиент chat_id: {chat_id}\n"
             f"✂️ Мастер: {master_name}\n"
@@ -189,20 +189,20 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             f"⏰ Уақыт: {draft.time}\n"
             f"💳 Баға: {price} тг\n"
             f"Статус: pending"
-        )
-        await tg_edit(ADMIN_CHAT_ID, admin_text)
-    else:
-        print("⚠ ADMIN_CHAT_ID орнатылмаған!")
+            )
+            await tg_send(ADMIN_CHAT_ID, admin_text)
+        else:
+                print("⚠ ADMIN_CHAT_ID орнатылмаған!")
 
-    clear_draft(chat_id)
-    return
+        clear_draft(chat_id)
+        return
 
 
     
 
     if data == "confirm:no":
-        await tg_edit(chat_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())
+        await tg_edit(chat_id,message_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())
         clear_draft(chat_id)
         return
 
-    await tg_edit(chat_id, "Түсінбедім. Мәзірден таңдаңыз:", reply_markup=main_menu_kb())
+    await tg_edit(chat_id, message_id,"Түсінбедім. Мәзірден таңдаңыз:", reply_markup=main_menu_kb())
