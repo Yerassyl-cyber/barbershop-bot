@@ -142,7 +142,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             f"💳 Баға: {price} тг\n\n"
             "Растаймыз ба?"
         )
-        await tg_edit(chat_id, summary, reply_markup=confirm_kb())
+        await tg_edit(chat_id,message_id, summary, reply_markup=confirm_kb())
         return
 
     if data == "confirm:yes":
@@ -157,7 +157,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         draft.time or ""
         )
         if taken:
-           await tg_edit(chat_id, "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
+           await tg_edit(chat_id,message_id, "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
            return
 
         # ✅ SQL-ға сақтаймыз (pyodbc sync болғандықтан thread)
