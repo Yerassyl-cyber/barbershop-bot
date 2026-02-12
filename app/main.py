@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, Header, HTTPException
 from .config import WEBHOOK_SECRET
 from .telegram_api import init_client, close_client, tg_answer_callback
 from .handlers import handle_start, handle_callback
+from .db import init_db
 
 app = FastAPI()
 
@@ -15,6 +16,8 @@ def root():
 @app.on_event("startup")
 async def on_startup():
     await init_client()
+    init_db()   # ✅ таблица автомат жасалады
+
     
 
 @app.on_event("shutdown")
