@@ -4,6 +4,7 @@ from .config import ADMIN_CHAT_ID
 import asyncio
 from .db import insert_booking, is_slot_taken
 from .telegram_api import tg_edit
+from datetime import datetime, timedelta
 
 
 MASTERS = {
@@ -17,8 +18,9 @@ SERVICES = {
     "combo": ("🔥 Стрижка+борода", 6500),
 }
 
-DAYS = ["Бүгін", "Ертең", "Сәрсенбі", "Бейсенбі"]  # кейін нақты күнге ауыстырамыз
+
 TIMES = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30"]  # үлгі
+
 
 def main_menu_kb():
     return {
@@ -48,11 +50,24 @@ def services_kb():
     }
 
 def days_kb():
-    return {
-        "inline_keyboard": [
-            [{"text": d, "callback_data": f"day:{d}"}] for d in DAYS
-        ] + [[{"text": "⬅️ Артқа", "callback_data": "back:services"}]]
-    }
+    rows = []
+    today = datetime.now()
+
+    for i in range(5):  # 5 күн алға
+        d = today + timedelta(days=i)
+
+        label = d.strftime("%a %d.%m")
+        iso = d.strftime("%Y-%m-%d")
+
+        rows.append([{
+            "text": label,
+            "callback_data": f"day:{iso}"
+        }])
+
+    rows.append([{"text": "⬅️ Артқа", "callback_data": "back:services"}])
+
+    return {"inline_keyboard": rows}
+
 
 def times_kb():
     # 2 баған қылып шығарайық
@@ -132,12 +147,14 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         master_name = MASTERS.get(draft.master_id or "", "?")
         service_name, price = SERVICES.get(draft.service_id or "", ("?", 0))
+        dt = datetime.strptime(draft.day, "%Y-%m-%d")
+        pretty_day = dt.strftime("%d.%m.%Y")
 
         summary = (
             "Тапсырысыңыз:\n"
             f"👤 Мастер: {master_name}\n"
             f"🛠 Қызмет: {service_name}\n"
-            f"📅 Күн: {draft.day}\n"
+            f"📅 Күн: {pretty_day}\n"
             f"⏰ Уақыт: {draft.time}\n"
             f"💳 Баға: {price} тг\n\n"
             "Растаймыз ба?"
