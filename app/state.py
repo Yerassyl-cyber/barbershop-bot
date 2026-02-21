@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
 @dataclass
+@dataclass
 class BookingDraft:
+    salon_id: int | None = None   
     master_id: str | None = None
     service_id: str | None = None
     day: str | None = None

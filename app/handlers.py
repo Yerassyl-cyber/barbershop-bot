@@ -5,7 +5,7 @@ import asyncio
 from .db import insert_booking, is_slot_taken
 from .telegram_api import tg_edit
 from datetime import datetime, timedelta
-
+from .db import get_salon_by_start_code
 
 MASTERS = {
     "1": "Асан",
@@ -70,7 +70,7 @@ def days_kb():
 
 
 def times_kb():
-    # 2 баған қылып шығарайық
+   
     rows = []
     for i in range(0, len(TIMES), 2):
         row = [{"text": TIMES[i], "callback_data": f"time:{TIMES[i]}"}]
@@ -88,9 +88,32 @@ def confirm_kb():
         ]
     }
 
-async def handle_start(chat_id: int):
-    await tg_send(chat_id, "Сәлем! ✂️ SheberCut\n\nТаңдаңыз:", reply_markup=main_menu_kb())
+async def handle_start(chat_id: int, start_payload: str | None = None):
+    clear_draft(chat_id)
+    draft = get_draft(chat_id)
 
+    if start_payload:
+        salon = await asyncio.to_thread(
+            get_salon_by_start_code,
+            start_payload
+        )
+
+        if salon:
+            salon_id, salon_name = salon
+            draft.salon_id = salon_id
+
+            await tg_send(
+                chat_id,
+                f"✂️ {salon_name}\n\nТаңдаңыз:",
+                reply_markup=main_menu_kb()
+            )
+            return
+
+    # Егер payload жоқ немесе дұрыс емес болса
+    await tg_send(
+        chat_id,
+        "Салон сілтемесі арқылы кіріңіз.\nМысалы: t.me/yourbot?start=salon_1"
+    )
 async def handle_prices(chat_id: int, message_id: int):
     text = "Бағалар:\n"
     for k, (name, price) in SERVICES.items():

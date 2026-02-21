@@ -7,30 +7,30 @@ def get_conn():
     return pyodbc.connect(SQL_CONN_STR)
 
 def init_db():
-    """
-    Таблица жоқ болса — өзі жасайды.
-    """
-    sql = """
-    IF OBJECT_ID('dbo.bookings', 'U') IS NULL
-    BEGIN
-        CREATE TABLE dbo.bookings (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            user_chat_id BIGINT NOT NULL,
-            master_id NVARCHAR(50) NOT NULL,
-            service_id NVARCHAR(50) NOT NULL,
-            day NVARCHAR(50) NOT NULL,
-            time NVARCHAR(50) NOT NULL,
-            price INT NOT NULL,
-            status NVARCHAR(20) NOT NULL DEFAULT 'pending',
-            created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
-        );
-    END
-    """
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(sql)
-        conn.commit()
 
+        # 1️⃣ salons таблица
+        cur.execute("""
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='salons' AND xtype='U')
+        CREATE TABLE salons (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            name NVARCHAR(255) NOT NULL,
+            start_code NVARCHAR(100) UNIQUE NOT NULL,
+            is_active BIT DEFAULT 1
+        )
+        """)
+
+        conn.commit()
+def get_salon_by_start_code(start_code: str):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, name FROM salons WHERE start_code = ? AND is_active = 1",
+            (start_code,)
+        )
+        row = cur.fetchone()
+        return row  # (id, name) немесе None
 def insert_booking(user_chat_id: int, master_id: str, service_id: str, day: str, time: str, price: int) -> int:
     """
     Жаңа запись қосады, booking_id қайтарады.
