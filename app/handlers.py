@@ -1,6 +1,6 @@
 from .telegram_api import tg_send, tg_edit
 from .state import get_draft, clear_draft  # немесе clear_booking_fields
-from .config import ADMIN_CHAT_ID
+from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
 from .db import (
@@ -154,7 +154,71 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data == "back:days":
         await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb())
         return
+    if data.startswith("time:"):
+        t = data.split(":", 1)[1]
+        draft.time = t
 
+    # master name
+        masters = await asyncio.to_thread(get_masters_by_salon, draft.salon_id)
+        master_name = next((name for (mid, name) in masters if str(mid) == str(draft.master_id)), "?")
+
+    # service title + price
+        services = await asyncio.to_thread(get_services_by_salon, draft.salon_id)
+        service_row = next(((sid, title, price) for (sid, title, price) in services if str(sid) == str(draft.service_id)), None)
+        if not service_row:
+            await tg_edit(chat_id, message_id, "Қызмет табылмады. Қайта таңдаңыз.", reply_markup=services_kb(draft.salon_id))
+            return
+        _, service_name, price = service_row
+
+    # slot check (salon-aware)
+        taken = await asyncio.to_thread(
+            is_slot_taken,
+            draft.salon_id,
+            draft.master_id or "",
+            draft.day or "",
+            draft.time or ""
+            )
+        if taken:
+            await tg_edit(chat_id, message_id, "⚠️ Бұл уақыт бос емес. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
+            return
+
+        booking_id = await asyncio.to_thread(
+            insert_booking,
+            draft.salon_id,
+            chat_id,
+            draft.master_id or "",
+            draft.service_id or "",
+            draft.day or "",
+            draft.time or "",
+            price
+            )
+
+    # user confirmation
+        await tg_edit(
+            chat_id, message_id,
+            f"✅ Жазылдыңыз! (№{booking_id})\nАдмин жақында хабарласады.\n\nҚайта меню:",
+            reply_markup=main_menu_kb()
+            )
+
+    # admin notification: take from salon
+        admin_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if admin_id:
+            admin_text = (
+            f"🆕 Жаңа запись! №{booking_id}\n\n"
+            f"👤 Клиент chat_id: {chat_id}\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_name}\n"
+            f"📅 Күн: {draft.day}\n"
+            f"⏰ Уақыт: {draft.time}\n"
+            f"💳 Баға: {price} тг\n"
+            f"Статус: pending"
+            )
+            await tg_send(admin_id, admin_text)
+        else:
+            print("⚠ Бұл салонға admin_chat_id қойылмаған")
+
+        clear_draft(chat_id)
+        return
     if data.startswith("time:"):
         t = data.split(":", 1)[1]
         draft.time = t
@@ -223,23 +287,23 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             f"✅ Жазылдыңыз! (№{booking_id})\nАдмин жақында хабарласады.\n\nҚайта меню:",
             reply_markup=main_menu_kb()
         )
-
-        if ADMIN_CHAT_ID:
-            admin_text = (
-                f"🆕 Жаңа запись! №{booking_id}\n\n"
-                f"👤 Клиент chat_id: {chat_id}\n"
-                f"🏠 Салон ID: {draft.salon_id}\n"
-                f"✂️ Мастер: {master_name}\n"
-                f"🛠 Қызмет: {service_name}\n"
-                f"📅 Күн: {draft.day}\n"
-                f"⏰ Уақыт: {draft.time}\n"
-                f"💳 Баға: {price} тг\n"
-                f"Статус: pending"
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, int(draft.salon_id))
+    if admin_chat_id:
+        admin_text = (
+            f"🆕 Жаңа запись! №{booking_id}\n\n"
+            f"👤 Клиент chat_id: {chat_id}\n"
+            f"🏠 Салон ID: {draft.salon_id}\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_name}\n"
+            f"📅 Күн: {draft.day}\n"
+            f"⏰ Уақыт: {draft.time}\n"
+            f"💳 Баға: {price} тг\n"
+            f"Статус: pending"
             )
-            await tg_send(ADMIN_CHAT_ID, admin_text)
+        await tg_send(admin_chat_id, admin_text)
 
-        clear_draft(chat_id)
-        return
+    clear_draft(chat_id)
+    return
 
     if data == "confirm:no":
         await tg_edit(chat_id, message_id, "❌ Болдырылмады.\n\nҚайта меню:", reply_markup=main_menu_kb())

@@ -22,6 +22,15 @@ def init_db():
         """)
 
         conn.commit()
+def get_salon_admin_chat_id(salon_id: int) -> int | None:
+    sql = "SELECT admin_chat_id FROM dbo.salons WHERE id = ?"
+    with get_conn() as conn:
+        cur = conn.cursor()
+        row = cur.execute(sql, salon_id).fetchone()
+        if not row or row[0] is None:
+            return None
+        return int(row[0])
+    
 def get_salon_by_start_code(start_code: str):
     with get_conn() as conn:
         cur = conn.cursor()
