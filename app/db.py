@@ -31,33 +31,83 @@ def get_salon_by_start_code(start_code: str):
         )
         row = cur.fetchone()
         return row  # (id, name) немесе None
-def insert_booking(user_chat_id: int, master_id: str, service_id: str, day: str, time: str, price: int) -> int:
-    """
-    Жаңа запись қосады, booking_id қайтарады.
-    """
-    sql = """
-    INSERT INTO dbo.bookings (user_chat_id, master_id, service_id, day, time, price, status)
-    OUTPUT INSERTED.id
-    VALUES (?, ?, ?, ?, ?, ?, 'pending');
-    """
+    
+
+def get_masters_by_salon(salon_id: int):
     with get_conn() as conn:
         cur = conn.cursor()
-        row = cur.execute(sql, user_chat_id, master_id, service_id, day, time, price).fetchone()
+        cur.execute(
+            "SELECT id, name FROM masters WHERE salon_id=? AND is_active=1 ORDER BY id",
+            (salon_id,)
+        )
+        return cur.fetchall()  # [(id, name), ...]
+
+def get_services_by_salon(salon_id: int):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, title, price FROM services WHERE salon_id=? AND is_active=1 ORDER BY id",
+            (salon_id,)
+        )
+        return cur.fetchall()  # [(id, title, price), ...]
+    
+def insert_booking(
+    user_chat_id: int,
+    salon_id: int,
+    master_id: str,
+    service_id: str,
+    day: str,
+    time: str,
+    price: int
+) -> int:
+
+    sql = """
+    INSERT INTO dbo.bookings
+    (user_chat_id, salon_id, master_id, service_id, day, time, price, status)
+    OUTPUT INSERTED.id
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending');
+    """
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            sql,
+            user_chat_id,
+            salon_id,
+            master_id,
+            service_id,
+            day,
+            time,
+            price
+        ).fetchone()
         conn.commit()
         return int(row[0])
 
-def is_slot_taken(master_id: str, day: str, time: str) -> bool:
-    """
-    Бір мастерге бір күн/уақыт бронь бар ма?
-    (pending/approved болса бос емес деп есептейміз)
-    """
+def is_slot_taken(
+    salon_id: int,
+    master_id: str,
+    day: str,
+    time: str
+) -> bool:
+
     sql = """
     SELECT TOP 1 id
     FROM dbo.bookings
-    WHERE master_id = ? AND day = ? AND time = ?
+    WHERE salon_id = ?
+      AND master_id = ?
+      AND day = ?
+      AND time = ?
       AND status IN ('pending', 'approved')
     """
+
     with get_conn() as conn:
         cur = conn.cursor()
-        row = cur.execute(sql, master_id, day, time).fetchone()
+        row = cur.execute(
+            sql,
+            salon_id,
+            master_id,
+            day,
+            time
+        ).fetchone()
+
         return row is not None

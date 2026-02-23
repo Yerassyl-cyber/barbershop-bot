@@ -19,3 +19,11 @@ def get_draft(chat_id: int) -> BookingDraft:
 
 def clear_draft(chat_id: int):
     BOOKINGS.pop(chat_id, None)
+
+def clear_booking_fields(chat_id: int):
+    d = get_draft(chat_id)
+    d.master_id = None
+    d.service_id = None
+    d.day = None
+    d.time = None
+    # salon_id қалсын!
