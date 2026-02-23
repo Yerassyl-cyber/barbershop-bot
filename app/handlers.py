@@ -219,36 +219,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         clear_draft(chat_id)
         return
-    if data.startswith("time:"):
-        t = data.split(":", 1)[1]
-        draft.time = t
-
-        # summary + confirm
-        masters = await asyncio.to_thread(get_masters_by_salon, draft.salon_id)
-        master_name = next((name for (mid, name) in masters if str(mid) == str(draft.master_id)), "?")
-
-        services = await asyncio.to_thread(get_services_by_salon, draft.salon_id)
-        service_name, price = _find_service(services, draft.service_id)
-
-        dt = datetime.strptime(draft.day, "%Y-%m-%d")
-        pretty_day = dt.strftime("%d.%m.%Y")
-
-        summary = (
-            "Тапсырысыңыз:\n"
-            f"👤 Мастер: {master_name}\n"
-            f"🛠 Қызмет: {service_name}\n"
-            f"📅 Күн: {pretty_day}\n"
-            f"⏰ Уақыт: {draft.time}\n"
-            f"💳 Баға: {price} тг\n\n"
-            "Растаймыз ба?"
-        )
-
-        # price-ты draft-қа сақтап қойсаң да болады (қаласаң)
-        draft.price = price  # Draft-та price field болса
-
-        await tg_edit(chat_id, message_id, summary, reply_markup=confirm_kb())
-        return
-
+    
     if data == "confirm:yes":
         if not (draft.salon_id and draft.master_id and draft.service_id and draft.day and draft.time):
             await tg_edit(chat_id, message_id, "⚠️ Дерек толық емес. Қайтадан бастап көріңіз.", reply_markup=main_menu_kb())

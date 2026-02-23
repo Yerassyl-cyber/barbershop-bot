@@ -22,16 +22,16 @@ async def tg_send(chat_id: int, text: str, reply_markup: dict | None = None):
 
 import httpx
 
-async def tg_answer_callback(callback_query_id: str, text: str | None = None):
-    payload = {"callback_query_id": callback_query_id}
-    if text:
-        payload["text"] = text
+async def tg_answer_callback(callback_query_id: str):
     try:
-        r = await client.post(f"{TELEGRAM_API}/answerCallbackQuery", json=payload)
-        r.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        # 400 болса да бот құламасын
-        print("⚠️ answerCallbackQuery failed:", e.response.text)
+        await client.post(
+            "answerCallbackQuery",
+            json={"callback_query_id": callback_query_id},
+            timeout=5
+        )
+    except Exception as e:
+        # Бұл жиі болады, ботты құлатпау керек
+        print(f"⚠️ answerCallbackQuery failed (ignored): {e}")
 
 
 async def tg_edit(chat_id: int, message_id: int, text: str, reply_markup: dict | None = None):
