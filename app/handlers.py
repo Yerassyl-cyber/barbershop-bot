@@ -260,14 +260,14 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         booking_id = await asyncio.to_thread(
             insert_booking,
-            draft.salon_id,
-            chat_id,
+            chat_id,          # 1) user_chat_id
+            draft.salon_id,   # 2) salon_id
             draft.master_id,
             draft.service_id,
             draft.day,
             draft.time,
             int(price),
-            )
+            )   
 
         await tg_edit(
             chat_id, message_id,
