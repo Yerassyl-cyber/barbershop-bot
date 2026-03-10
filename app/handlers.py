@@ -22,6 +22,18 @@ def main_menu_kb():
         ]
     }
 
+def phone_request_kb():
+    return {
+        "keyboard": [
+            [{"text": "📞 Телефон нөмірімді жіберу", "request_contact": True}],
+            [{"text": "⬅️ Бас тарту"}]
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": True
+    }
+
+def remove_reply_kb():
+    return {"remove_keyboard": True}
 
 def masters_kb(salon_id: int):
     masters = get_masters_by_salon(salon_id)
@@ -109,6 +121,46 @@ async def handle_prices(chat_id: int, message_id: int):
 
     await tg_edit(chat_id, message_id, text + "\n⬅️ Артқа қайтайық:", reply_markup=main_menu_kb())
 
+async def handle_message(chat_id: int, text: str | None, message: dict):
+    draft = get_draft(chat_id)
+
+    # телефон күтіп тұрсақ:
+    if getattr(draft, "step", None) == "wait_phone":
+        contact = message.get("contact")
+        if not contact:
+            await tg_send(chat_id, "Телефонды тек батырма арқылы жіберіңіз.", reply_markup=phone_request_kb())
+            return
+
+        # өз контакты екенін тексеру
+        from_id = message["from"]["id"]
+        contact_user_id = contact.get("user_id")
+        if contact_user_id is None or int(contact_user_id) != int(from_id):
+            await tg_send(chat_id, "❌ Тек өз нөміріңізді жіберіңіз.", reply_markup=phone_request_kb())
+            return
+
+        # phone сақтаймыз
+        draft.client_phone = contact.get("phone_number", "").strip()
+
+        # Telegram профилінен атын аламыз
+        first = (message["from"].get("first_name") or "").strip()
+        last = (message["from"].get("last_name") or "").strip()
+        draft.client_name = (first + " " + last).strip()
+
+        # reply keyboard-ты алып тастау
+        await tg_send(chat_id, "✅ Қабылданды.", reply_markup=remove_reply_kb())
+
+        # Келесі қадам: қайтадан негізгі message-ті edit жасап confirm экранды қайта шығарамыз
+        draft.step = None
+
+        main_mid = getattr(draft, "main_message_id", None)
+        if main_mid:
+            await tg_edit(
+                chat_id,
+                main_mid,
+                "✅ Телефон қабылданды.\nЕнді жазылуды растаңыз:",
+                reply_markup=confirm_kb()
+            )
+        return
 
 async def handle_callback(chat_id: int, data: str, message_id: int):
     draft = get_draft(chat_id)
@@ -233,6 +285,26 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     # ЕСКЕРТУ: қазіргі логикада бұл шақырылмауы мүмкін
     # ----------------------------
     if data == "confirm:yes":
+        draft.main_message_id = message_id
+
+    # 1) Егер телефон әлі жоқ болса — телефон сұраймыз (бронь жасамаймыз)
+        if not getattr(draft, "client_phone", None):
+            draft.step = "wait_phone"
+            await tg_edit(
+            chat_id,
+            message_id,
+            "📞 Жазылуды аяқтау үшін телефон нөміріңізді жіберіңіз.\n\n"
+            "Төменнен шыққан батырманы басыңыз (қолмен жазу қабылданбайды).",
+            reply_markup=None  # inline кнопкаларды алып тастаймыз (қаласаң қалдыруға да болады)
+            )
+            await tg_send(chat_id, "👇 Батырманы басыңыз:", reply_markup=phone_request_kb())
+            return
+
+    # 2) Егер аты-жөні әлі жоқ болса — Telegram профилінен алып confirm жасаймыз (optional)
+        if not getattr(draft, "client_name", None):
+            # Telegram аты callback-та жоқ болады, сондықтан ең оңайы:
+        # - атын кейін контакт келген message handler-де аламыз (төменде көрсетем)
+            pass
         if not (draft.salon_id and draft.master_id and draft.service_id and draft.day and draft.time):
             await tg_edit(chat_id, message_id, "⚠️ Дерек толық емес. Қайтадан бастап көріңіз.", reply_markup=main_menu_kb())
             return
@@ -280,6 +352,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             admin_text = (
             f"🆕 Жаңа запись! №{booking_id}\n\n"
             f"👤 Клиент chat_id: {chat_id}\n"
+            f"📞 Тел: {getattr(draft,'client_phone','-')}\n"
             f"✂️ Мастер: {master_name}\n"
             f"🛠 Қызмет: {service_name}\n"
             f"📅 Күн: {draft.day}\n"
