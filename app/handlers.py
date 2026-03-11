@@ -91,8 +91,8 @@ async def handle_cancel(callback_data, chat_id, message_id):
 
         row_booking_id = row[0]
         row_user_chat_id = row[1]
-        row_status = row[2]
-        calendar_event_id = row[3]   # 🔥 МІНЕ ОСЫ ЖЕР ДҰРЫС БОЛУ КЕРЕК
+        row_status = row[8]
+        calendar_event_id = row[9]   # 🔥 МІНЕ ОСЫ ЖЕР ДҰРЫС БОЛУ КЕРЕК
 
         print("DELETE EVENT ID:", calendar_event_id)
 
