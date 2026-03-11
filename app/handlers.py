@@ -128,14 +128,22 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
     if getattr(draft, "step", None) == "wait_phone":
         contact = message.get("contact")
         if not contact:
-            await tg_send(chat_id, "Телефонды тек батырма арқылы жіберіңіз.", reply_markup=phone_request_kb())
+            await tg_send(
+                chat_id,
+                "Телефонды тек батырма арқылы жіберіңіз.",
+                reply_markup=phone_request_kb()
+            )
             return
 
         # өз контакты екенін тексеру
         from_id = message["from"]["id"]
         contact_user_id = contact.get("user_id")
         if contact_user_id is None or int(contact_user_id) != int(from_id):
-            await tg_send(chat_id, "❌ Тек өз нөміріңізді жіберіңіз.", reply_markup=phone_request_kb())
+            await tg_send(
+                chat_id,
+                "❌ Тек өз нөміріңізді жіберіңіз.",
+                reply_markup=phone_request_kb()
+            )
             return
 
         # phone сақтаймыз
@@ -146,18 +154,25 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
         last = (message["from"].get("last_name") or "").strip()
         draft.client_name = (first + " " + last).strip()
 
-        # reply keyboard-ты алып тастау
-        await tg_send(chat_id, "✅ Қабылданды.", reply_markup=remove_reply_kb())
-
-        # Келесі қадам: қайтадан негізгі message-ті edit жасап confirm экранды қайта шығарамыз
+        # енді телефон күту режимінен шығарамыз
         draft.step = None
 
+        # reply keyboard-ты алып тастау
+        await tg_send(chat_id, "✅ Телефон қабылданды.", reply_markup=remove_reply_kb())
+
         main_mid = getattr(draft, "main_message_id", None)
+
         if main_mid:
             await tg_edit(
                 chat_id,
                 main_mid,
                 "✅ Телефон қабылданды.\nЕнді жазылуды растаңыз:",
+                reply_markup=confirm_kb()
+            )
+        else:
+            await tg_send(
+                chat_id,
+                "Енді жазылуды растаңыз:",
                 reply_markup=confirm_kb()
             )
         return

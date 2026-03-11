@@ -26,4 +26,8 @@ def clear_booking_fields(chat_id: int):
     d.service_id = None
     d.day = None
     d.time = None
+    d.step = None
+    d.client_phone = None
+    d.client_name = None
+    d.main_message_id = None
     # salon_id қалсын!
