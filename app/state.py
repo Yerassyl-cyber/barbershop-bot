@@ -1,15 +1,18 @@
 from dataclasses import dataclass
+from typing import Optional
 
-@dataclass
 @dataclass
 class BookingDraft:
-    salon_id: int | None = None   
-    master_id: str | None = None
-    service_id: str | None = None
-    day: str | None = None
-    time: str | None = None
+    salon_id: Optional[int] = None
+    master_id: Optional[str] = None
+    service_id: Optional[str] = None
+    day: Optional[str] = None
+    time: Optional[str] = None
+    step: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_name: Optional[str] = None
+    main_message_id: Optional[int] = None
 
-# chat_id -> BookingDraft
 BOOKINGS: dict[int, BookingDraft] = {}
 
 def get_draft(chat_id: int) -> BookingDraft:
@@ -30,4 +33,3 @@ def clear_booking_fields(chat_id: int):
     d.client_phone = None
     d.client_name = None
     d.main_message_id = None
-    # salon_id қалсын!

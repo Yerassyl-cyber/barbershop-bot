@@ -126,6 +126,8 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
 
     # телефон күтіп тұрсақ:
     if getattr(draft, "step", None) == "wait_phone":
+        await tg_send(chat_id, "DEBUG: wait_phone блогына кірді")
+
         contact = message.get("contact")
         if not contact:
             await tg_send(
@@ -135,7 +137,8 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
             )
             return
 
-        # өз контакты екенін тексеру
+        await tg_send(chat_id, "✅ Телефон қабылданды. Енді жазылуды растаңыз.")
+
         from_id = message["from"]["id"]
         contact_user_id = contact.get("user_id")
         if contact_user_id is None or int(contact_user_id) != int(from_id):
@@ -146,35 +149,40 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
             )
             return
 
-        # phone сақтаймыз
         draft.client_phone = contact.get("phone_number", "").strip()
 
-        # Telegram профилінен атын аламыз
         first = (message["from"].get("first_name") or "").strip()
         last = (message["from"].get("last_name") or "").strip()
         draft.client_name = (first + " " + last).strip()
 
-        # енді телефон күту режимінен шығарамыз
         draft.step = None
 
-        # reply keyboard-ты алып тастау
+        await tg_send(chat_id, f"DEBUG: phone={draft.client_phone}, name={draft.client_name}")
+
         await tg_send(chat_id, "✅ Телефон қабылданды.", reply_markup=remove_reply_kb())
 
         main_mid = getattr(draft, "main_message_id", None)
+        await tg_send(chat_id, f"DEBUG: main_message_id={main_mid}")
 
-        if main_mid:
-            await tg_edit(
-                chat_id,
-                main_mid,
-                "✅ Телефон қабылданды.\nЕнді жазылуды растаңыз:",
-                reply_markup=confirm_kb()
-            )
-        else:
-            await tg_send(
-                chat_id,
-                "Енді жазылуды растаңыз:",
-                reply_markup=confirm_kb()
-            )
+        try:
+            if main_mid:
+                await tg_edit(
+                    chat_id,
+                    main_mid,
+                    "✅ Телефон қабылданды.\nЕнді жазылуды растаңыз:",
+                    reply_markup=confirm_kb()
+                )
+                await tg_send(chat_id, "DEBUG: tg_edit орындалды")
+            else:
+                await tg_send(
+                    chat_id,
+                    "Енді жазылуды растаңыз:",
+                    reply_markup=confirm_kb()
+                )
+                await tg_send(chat_id, "DEBUG: tg_send confirm орындалды")
+        except Exception as e:
+            await tg_send(chat_id, f"DEBUG ERROR: {e}")
+
         return
 
 async def handle_callback(chat_id: int, data: str, message_id: int):
