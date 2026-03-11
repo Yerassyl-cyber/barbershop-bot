@@ -221,6 +221,7 @@ def insert_booking(
         conn.commit()
         return int(row[0])
 
+        
 
 def is_slot_taken(
     salon_id: int,
@@ -242,7 +243,97 @@ def is_slot_taken(
         cur = conn.cursor()
         row = cur.execute(sql, salon_id, master_id, day, time).fetchone()
         return row is not None
+def set_booking_calendar_event_id(booking_id: int, calendar_event_id: str):
+    sql = """
+    UPDATE dbo.bookings
+    SET calendar_event_id = ?
+    WHERE id = ?
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, calendar_event_id, booking_id)
+        conn.commit()
 
+
+def get_booking_for_cancel(booking_id: int):
+    sql = """
+    SELECT id, user_chat_id, salon_id, master_id, service_id, day, time, price, status, calendar_event_id
+    FROM dbo.bookings
+    WHERE id = ?
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        row = cur.execute(sql, booking_id).fetchone()
+        return row
+
+def get_user_active_bookings(user_chat_id: int):
+    sql = """
+    SELECT
+        b.id,
+        b.day,
+        b.time,
+        b.status,
+        m.name AS master_name,
+        s.title AS service_title,
+        b.price
+    FROM dbo.bookings b
+    LEFT JOIN dbo.masters m
+        ON CAST(m.id AS NVARCHAR(MAX)) = CAST(b.master_id AS NVARCHAR(MAX))
+       AND m.salon_id = b.salon_id
+    LEFT JOIN dbo.services s
+        ON CAST(s.id AS NVARCHAR(MAX)) = CAST(b.service_id AS NVARCHAR(MAX))
+       AND s.salon_id = b.salon_id
+    WHERE b.user_chat_id = ?
+      AND b.status IN ('pending', 'approved')
+    ORDER BY b.day, b.time
+    """
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        rows = cur.execute(sql, user_chat_id).fetchall()
+        return rows
+    
+def cancel_booking(booking_id: int):
+    sql = """
+    UPDATE dbo.bookings
+    SET status = 'cancelled'
+    WHERE id = ?
+      AND status <> 'cancelled'
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, booking_id)
+        conn.commit()
+
+
+def get_booking_full_info(booking_id: int):
+    sql = """
+    SELECT
+        b.id,
+        b.user_chat_id,
+        b.salon_id,
+        b.master_id,
+        b.service_id,
+        b.day,
+        b.time,
+        b.price,
+        b.status,
+        b.calendar_event_id,
+        m.name AS master_name,
+        s.title AS service_title
+    FROM dbo.bookings b
+    LEFT JOIN dbo.masters m
+        ON CAST(m.id AS NVARCHAR(MAX)) = CAST(b.master_id AS NVARCHAR(MAX))
+       AND m.salon_id = b.salon_id
+    LEFT JOIN dbo.services s
+        ON CAST(s.id AS NVARCHAR(MAX)) = CAST(b.service_id AS NVARCHAR(MAX))
+       AND s.salon_id = b.salon_id
+    WHERE b.id = ?
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        row = cur.execute(sql, booking_id).fetchone()
+        return row
 
 if __name__ == "__main__":
     init_db()

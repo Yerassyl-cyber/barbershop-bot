@@ -3,14 +3,120 @@ from .state import get_draft, clear_draft,clear_booking_fields  # немесе c
 from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
-from .calendar_service import create_calendar_event
+from .calendar_service import create_calendar_event, delete_calendar_event
 from .db import (
     get_salon_by_start_code,
     get_masters_by_salon,
     get_services_by_salon,
     insert_booking,
     is_slot_taken,
+    set_booking_calendar_event_id,
+    get_user_active_bookings,
+    get_booking_for_cancel
 )
+from .db import cancel_booking
+
+async def handle_my_bookings(chat_id: int, message_id: int):
+    rows = await asyncio.to_thread(get_user_active_bookings, chat_id)
+
+    if not rows:
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Сізде белсенді жазылу жоқ.",
+            reply_markup=main_menu_kb()
+        )
+        return
+
+    text = "📋 Менің жазылуларым:\n\n"
+
+    for row in rows:
+        booking_id = row[0]
+        day = row[1]
+        time_ = row[2]
+        status = row[3]
+        master_name = row[4] or "-"
+        service_title = row[5] or "-"
+        price = row[6]
+
+        text += (
+            f"№{booking_id}\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_title}\n"
+            f"📅 Күн: {day}\n"
+            f"⏰ Уақыт: {time_}\n"
+            f"💳 Баға: {price} тг\n"
+            f"📌 Статус: {status}\n\n"
+        )
+
+    await tg_edit(
+        chat_id,
+        message_id,
+        text,
+        reply_markup=my_bookings_kb(rows)
+    )
+    
+def my_bookings_kb(rows):
+    keyboard = []
+
+    for row in rows:
+        booking_id = row[0]
+        keyboard.append([
+            {
+                "text": f"❌ Отменить №{booking_id}",
+                "callback_data": f"cancel:{booking_id}"
+            }
+        ])
+
+    keyboard.append([{"text": "⬅️ Артқа", "callback_data": "menu:back"}])
+
+    return {"inline_keyboard": keyboard}
+
+def booking_done_kb(booking_id: int):
+    return {
+        "inline_keyboard": [
+            [{"text": "❌ Записьті болдырмау", "callback_data": f"cancel:{booking_id}"}],
+            [{"text": "🏠 Басты мәзір", "callback_data": "menu:back"}],
+        ]
+    }
+async def handle_cancel(callback_data, chat_id, message_id):
+    try:
+        booking_id = int(callback_data.split(":")[1])
+
+        row = await asyncio.to_thread(get_booking_for_cancel, booking_id)
+
+        if not row:
+            await tg_edit(chat_id, message_id, "⚠️ Запись табылмады.")
+            return
+
+        row_booking_id = row[0]
+        row_user_chat_id = row[1]
+        row_status = row[2]
+        calendar_event_id = row[3]
+
+        if int(row_user_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл запись сізге тиесілі емес.")
+            return
+
+        if row_status == "cancelled":
+            await tg_edit(chat_id, message_id, "ℹ️ Бұл запись бұрыннан отмена жасалған.")
+            return
+
+        await asyncio.to_thread(cancel_booking, booking_id)
+
+        if calendar_event_id:
+            await asyncio.to_thread(delete_calendar_event, calendar_event_id)
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            f"❌ Запись отменена. №{row_booking_id}",
+            reply_markup=main_menu_kb()
+        )
+
+    except Exception as e:
+        print(f"CANCEL ERROR: {e}")
+        await tg_send(chat_id, f"⚠️ Отмена кезінде қате шықты: {e}")
 
 TIMES = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30"]
 
@@ -20,6 +126,7 @@ def main_menu_kb():
         "inline_keyboard": [
             [{"text": "📅 Запись", "callback_data": "menu:book"}],
             [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
+            [{"text": "📋 Менің жазылуларым", "callback_data": "menu:my_bookings"}],
         ]
     }
 
@@ -179,14 +286,18 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
 
 async def handle_callback(chat_id: int, data: str, message_id: int):
     draft = get_draft(chat_id)
-
+    if data.startswith("cancel:"):
+        await handle_cancel(data, chat_id, message_id)
+        return
     # ----------------------------
     # MAIN MENU
     # ----------------------------
     if data == "menu:prices":
         await handle_prices(chat_id, message_id)
         return
-
+    if data == "menu:my_bookings":
+        await handle_my_bookings(chat_id, message_id)
+        return
     if data == "menu:book":
         if not draft.salon_id:
             await tg_edit(chat_id, message_id, "Салон таңдалмаған. /start link арқылы кіріңіз.")
@@ -404,9 +515,9 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             int(price),
             )
         salon_name = "Nur Barber"
-
+        calendar_event_id = None
         try:
-            await asyncio.to_thread(
+            calendar_event_id =await asyncio.to_thread(
                 create_calendar_event,
                 salon_name,
                 master_name,
@@ -417,13 +528,20 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
                 draft.time,
                 30,  # duration_minutes
             )
+            if calendar_event_id:
+                await asyncio.to_thread(
+                    set_booking_calendar_event_id,
+                    booking_id,
+                    calendar_event_id
+                    )
         except Exception as e:
             print(f"Google Calendar error: {e}")
 
         await tg_edit(
-            chat_id, message_id,
-            f"✅ Жазылдыңыз! (№{booking_id})\nАдмин жақында хабарласады.\n\nҚайта меню:",
-            reply_markup=main_menu_kb()
+            chat_id,
+            message_id,
+            f"✅ Жазылдыңыз! (№{booking_id})\n\nҚажет болса төмендегі батырмамен отмена жасай аласыз:",
+            reply_markup=booking_done_kb(booking_id)
             )
 
         admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)

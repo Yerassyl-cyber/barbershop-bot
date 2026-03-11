@@ -28,6 +28,9 @@ def _almaty_dt(day: str, time_str: str) -> datetime:
     return dt.replace(tzinfo=timezone(timedelta(hours=5)))
 
 
+# ---------------------------------------------------
+# CREATE EVENT
+# ---------------------------------------------------
 def create_calendar_event(
     salon_name: str,
     master_name: str,
@@ -38,6 +41,7 @@ def create_calendar_event(
     time_str: str,
     duration_minutes: int = 30,
 ) -> str:
+
     if not GOOGLE_CALENDAR_ID:
         raise RuntimeError("GOOGLE_CALENDAR_ID орнатылмаған")
 
@@ -69,4 +73,37 @@ def create_calendar_event(
         body=event
     ).execute()
 
+    # 🔥 production үшін print өте пайдалы
+    print("Calendar event created:", created["id"])
+
     return created["id"]
+
+
+# ---------------------------------------------------
+# DELETE EVENT
+# ---------------------------------------------------
+def delete_calendar_event(event_id: str):
+    """
+    Calendar-дағы event-ті өшіреді.
+    Егер event жоқ болса — silent өтеді.
+    """
+    if not GOOGLE_CALENDAR_ID:
+        raise RuntimeError("GOOGLE_CALENDAR_ID орнатылмаған")
+
+
+    if not event_id:
+        return
+
+    service = _get_service()
+
+    try:
+        service.events().delete(
+            calendarId=GOOGLE_CALENDAR_ID,
+            eventId=event_id
+        ).execute()
+
+        print("Calendar event deleted:", event_id)
+
+    except Exception as e:
+        # 🔥 өте маңызды — кейде event already deleted болады
+        print(f"Calendar delete error ({event_id}):", e)
