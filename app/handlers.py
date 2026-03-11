@@ -92,7 +92,9 @@ async def handle_cancel(callback_data, chat_id, message_id):
         row_booking_id = row[0]
         row_user_chat_id = row[1]
         row_status = row[2]
-        calendar_event_id = row[3]
+        calendar_event_id = row[3]   # 🔥 МІНЕ ОСЫ ЖЕР ДҰРЫС БОЛУ КЕРЕК
+
+        print("DELETE EVENT ID:", calendar_event_id)
 
         if int(row_user_chat_id) != int(chat_id):
             await tg_edit(chat_id, message_id, "❌ Бұл запись сізге тиесілі емес.")
@@ -117,7 +119,6 @@ async def handle_cancel(callback_data, chat_id, message_id):
     except Exception as e:
         print(f"CANCEL ERROR: {e}")
         await tg_send(chat_id, f"⚠️ Отмена кезінде қате шықты: {e}")
-
 TIMES = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30"]
 
 
