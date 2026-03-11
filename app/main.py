@@ -41,13 +41,16 @@ async def barber_webhook(
 
     cb = update.get("callback_query")
     if cb:
-        # ✅ бұл “баяу жауап” проблемасын шешеді
         await tg_answer_callback(cb["id"])
 
         chat_id = cb["message"]["chat"]["id"]
-        msg_id = cb["message"]["message_id"]   # ✅ осы керек
+        msg_id = cb["message"]["message_id"]
         data = cb.get("data", "")
-        await handle_callback(chat_id, data, msg_id)
+
+        try:
+            await handle_callback(chat_id, data, msg_id)
+        except Exception as e:
+            print(f"CALLBACK ERROR: {e}")
 
         return {"ok": True}
 

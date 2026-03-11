@@ -246,52 +246,102 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 # TIME -> SHOW CONFIRMATION (растау арқылы бронь)
 # ----------------------------
     if data.startswith("time:"):
-        t = data.split(":", 1)[1]
-        draft.time = t
+        try:
+            t = data.split(":", 1)[1]
+            draft.time = t
 
-        if not draft.salon_id:
-            await tg_edit(chat_id, message_id, "Салон таңдалмаған. /start арқылы кіріңіз.", reply_markup=main_menu_kb())
-            return
+            if not draft.salon_id:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "Салон таңдалмаған. /start арқылы кіріңіз.",
+                    reply_markup=main_menu_kb()
+                )
+                return
 
-    # master name
-        masters = await asyncio.to_thread(get_masters_by_salon, draft.salon_id)
-        master_name = next((name for (mid, name) in masters if str(mid) == str(draft.master_id)), "?")
+            if not draft.master_id:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "Мастер таңдалмаған. Қайтадан таңдаңыз.",
+                    reply_markup=masters_kb(draft.salon_id)
+                )
+                return
 
-    # service title + price
-        services = await asyncio.to_thread(get_services_by_salon, draft.salon_id)
-        service_row = next(
-            ((sid, title, price) for (sid, title, price) in services if str(sid) == str(draft.service_id)),
-            None
+            if not draft.service_id:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "Қызмет таңдалмаған. Қайтадан таңдаңыз.",
+                    reply_markup=services_kb(draft.salon_id)
+                )
+                return
+
+            if not draft.day:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "Күн таңдалмаған. Қайтадан таңдаңыз.",
+                    reply_markup=days_kb()
+                )
+                return
+
+            masters = await asyncio.to_thread(get_masters_by_salon, draft.salon_id)
+            master_name = next(
+                (name for (mid, name) in masters if str(mid) == str(draft.master_id)),
+                "?"
             )
-        if not service_row:
-            await tg_edit(chat_id, message_id, "Қызмет табылмады. Қайта таңдаңыз.", reply_markup=services_kb(draft.salon_id))
-            return
 
-        _, service_name, price = service_row
-
-    # slot check
-        taken = await asyncio.to_thread(
-            is_slot_taken,
-            draft.salon_id,
-            draft.master_id or "",
-            draft.day or "",
-            draft.time or ""
+            services = await asyncio.to_thread(get_services_by_salon, draft.salon_id)
+            service_row = next(
+                ((sid, title, price) for (sid, title, price) in services if str(sid) == str(draft.service_id)),
+                None
             )
-        if taken:
-            await tg_edit(chat_id, message_id, "⚠️ Бұл уақыт бос емес. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
+
+            if not service_row:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "Қызмет табылмады. Қайта таңдаңыз.",
+                    reply_markup=services_kb(draft.salon_id)
+                )
+                return
+
+            _, service_name, price = service_row
+
+            taken = await asyncio.to_thread(
+                is_slot_taken,
+                draft.salon_id,
+                draft.master_id,
+                draft.day,
+                draft.time
+            )
+
+            if taken:
+                await tg_edit(
+                    chat_id,
+                    message_id,
+                    "⚠️ Бұл уақыт бос емес. Басқа уақыт таңдаңыз:",
+                    reply_markup=times_kb()
+                )
+                return
+
+            text = (
+                "Растайсыз ба?\n\n"
+                f"✂️ Мастер: {master_name}\n"
+                f"🛠 Қызмет: {service_name}\n"
+                f"📅 Күн: {draft.day}\n"
+                f"⏰ Уақыт: {draft.time}\n"
+                f"💳 Баға: {price} тг"
+            )
+
+            await tg_edit(chat_id, message_id, text, reply_markup=confirm_kb())
             return
 
-    # ✅ CONFIRM SCREEN
-        text = (
-        "Растайсыз ба?\n\n"
-        f"✂️ Мастер: {master_name}\n"
-        f"🛠 Қызмет: {service_name}\n"
-        f"📅 Күн: {draft.day}\n"
-        f"⏰ Уақыт: {draft.time}\n"
-        f"💳 Баға: {price} тг"
-        )
-        await tg_edit(chat_id, message_id, text, reply_markup=confirm_kb())
-        return
+        except Exception as e:
+            print(f"TIME CALLBACK ERROR: {e}")
+            await tg_send(chat_id, f"⚠️ Қате шықты: {e}")
+            return
 
     # ----------------------------
     # CONFIRMATION (қалсын, бірақ дұрыс жұмыс істесін)
