@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Header, HTTPException
 
 from .config import WEBHOOK_SECRET
 from .telegram_api import init_client, close_client, tg_answer_callback
-from .handlers import handle_start, handle_callback
+from .handlers import handle_start, handle_callback,handle_message
 from .db import init_db
 
 app = FastAPI()
@@ -52,16 +52,16 @@ async def barber_webhook(
         return {"ok": True}
 
     msg = update.get("message")
-    if msg and "text" in msg:
+    if msg:
         chat_id = msg["chat"]["id"]
-        text = msg["text"]
+        text = msg.get("text")
 
-        if text.startswith("/start"):
-           parts = text.split(" ", 1)
-           payload = parts[1].strip() if len(parts) > 1 else None
-           await handle_start(chat_id, payload)
+        if text and text.startswith("/start"):
+            parts = text.split(" ", 1)
+            payload = parts[1].strip() if len(parts) > 1 else None
+            await handle_start(chat_id, payload)
         else:
-            await handle_start(chat_id)
-
+            await handle_message(chat_id, text, msg)
+        
 
     return {"ok": True}
