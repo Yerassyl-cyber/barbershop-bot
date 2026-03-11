@@ -87,6 +87,7 @@ def delete_calendar_event(event_id: str):
     Calendar-дағы event-ті өшіреді.
     Егер event жоқ болса — silent өтеді.
     """
+    print("DELETE CALLED WITH:", event_id)
     if not GOOGLE_CALENDAR_ID:
         raise RuntimeError("GOOGLE_CALENDAR_ID орнатылмаған")
 

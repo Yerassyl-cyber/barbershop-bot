@@ -107,7 +107,7 @@ async def handle_cancel(callback_data, chat_id, message_id):
         await asyncio.to_thread(cancel_booking, booking_id)
 
         if calendar_event_id:
-            await asyncio.to_thread(delete_calendar_event, calendar_event_id)
+            await asyncio.to_thread(delete_calendar_event, str(calendar_event_id))
 
         await tg_edit(
             chat_id,
