@@ -1,5 +1,5 @@
 from .telegram_api import tg_send, tg_edit
-from .state import get_draft, clear_draft  # немесе clear_booking_fields
+from .state import get_draft, clear_draft,clear_booking_fields  # немесе clear_booking_fields
 from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
@@ -123,7 +123,14 @@ async def handle_prices(chat_id: int, message_id: int):
 
 async def handle_message(chat_id: int, text: str | None, message: dict):
     draft = get_draft(chat_id)
-
+    if text == "⬅️ Бас тарту":
+        draft.step = None
+        await tg_send(chat_id, "Таңдаңыз:", reply_markup=remove_reply_kb())
+        if draft.salon_id:
+            await tg_send(chat_id, "Негізгі мәзір:", reply_markup=main_menu_kb())
+        else:
+             await tg_send(chat_id, "Салон таңдалмаған. /start арқылы қайта кіріңіз.")
+        return
     # телефон күтіп тұрсақ
     if getattr(draft, "step", None) == "wait_phone":
 
@@ -185,10 +192,8 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             return
 
         # салонды сақтап, қалғанын тазалау
-        salon_id = draft.salon_id
-        clear_draft(chat_id)
+        clear_booking_fields(chat_id)
         draft = get_draft(chat_id)
-        draft.salon_id = salon_id
 
         await tg_edit(chat_id, message_id, "Мастерді таңдаңыз:", reply_markup=masters_kb(draft.salon_id))
         return
@@ -369,7 +374,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             )
             await tg_send(admin_chat_id, admin_text)
 
-        clear_draft(chat_id)
+        clear_booking_fields(chat_id)
         return
    
     if data == "confirm:no":
