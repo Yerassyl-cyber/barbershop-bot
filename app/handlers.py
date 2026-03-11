@@ -3,6 +3,7 @@ from .state import get_draft, clear_draft,clear_booking_fields  # немесе c
 from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
+from .calendar_service import create_calendar_event
 from .db import (
     get_salon_by_start_code,
     get_masters_by_salon,
@@ -351,7 +352,23 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             draft.day,
             draft.time,
             int(price),
-            )   
+            )
+        salon_name = "Nur Barber"
+
+        try:
+            await asyncio.to_thread(
+                create_calendar_event,
+                salon_name,
+                master_name,
+                service_name,
+                getattr(draft, "client_name", None),
+                getattr(draft, "client_phone", None),
+                draft.day,
+                draft.time,
+                30,  # duration_minutes
+            )
+        except Exception as e:
+            print(f"Google Calendar error: {e}")
 
         await tg_edit(
             chat_id, message_id,
