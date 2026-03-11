@@ -124,9 +124,8 @@ async def handle_prices(chat_id: int, message_id: int):
 async def handle_message(chat_id: int, text: str | None, message: dict):
     draft = get_draft(chat_id)
 
-    # телефон күтіп тұрсақ:
+    # телефон күтіп тұрсақ
     if getattr(draft, "step", None) == "wait_phone":
-        await tg_send(chat_id, "DEBUG: wait_phone блогына кірді")
 
         contact = message.get("contact")
         if not contact:
@@ -137,10 +136,9 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
             )
             return
 
-        await tg_send(chat_id, "✅ Телефон қабылданды. Енді жазылуды растаңыз.")
-
         from_id = message["from"]["id"]
         contact_user_id = contact.get("user_id")
+
         if contact_user_id is None or int(contact_user_id) != int(from_id):
             await tg_send(
                 chat_id,
@@ -149,39 +147,25 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
             )
             return
 
+        # телефон сақтау
         draft.client_phone = contact.get("phone_number", "").strip()
 
+        # Telegram аты
         first = (message["from"].get("first_name") or "").strip()
         last = (message["from"].get("last_name") or "").strip()
         draft.client_name = (first + " " + last).strip()
 
         draft.step = None
 
-        await tg_send(chat_id, f"DEBUG: phone={draft.client_phone}, name={draft.client_name}")
-
+        # reply keyboard алып тастау
         await tg_send(chat_id, "✅ Телефон қабылданды.", reply_markup=remove_reply_kb())
 
-        main_mid = getattr(draft, "main_message_id", None)
-        await tg_send(chat_id, f"DEBUG: main_message_id={main_mid}")
-
-        try:
-            if main_mid:
-                await tg_edit(
-                    chat_id,
-                    main_mid,
-                    "✅ Телефон қабылданды.\nЕнді жазылуды растаңыз:",
-                    reply_markup=confirm_kb()
-                )
-                await tg_send(chat_id, "DEBUG: tg_edit орындалды")
-            else:
-                await tg_send(
-                    chat_id,
-                    "Енді жазылуды растаңыз:",
-                    reply_markup=confirm_kb()
-                )
-                await tg_send(chat_id, "DEBUG: tg_send confirm орындалды")
-        except Exception as e:
-            await tg_send(chat_id, f"DEBUG ERROR: {e}")
+        # confirm хабарлама
+        await tg_send(
+            chat_id,
+            "Енді жазылуды растаңыз:",
+            reply_markup=confirm_kb()
+        )
 
         return
 
