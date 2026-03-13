@@ -157,6 +157,7 @@ def main_menu_kb():
             [{"text": "📅 Запись", "callback_data": "menu:book"}],
             [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
             [{"text": "📋 Менің жазылуларым", "callback_data": "menu:my_bookings"}],
+            [{"text": "📸 Instagram", "url": "https://instagram.com/emba_barbershop"}]
         ]
     }
 
@@ -259,9 +260,14 @@ async def handle_start(chat_id: int, start_payload: str | None = None):
         if salon:
             salon_id, salon_name = salon
             draft.salon_id = int(salon_id)
-            await tg_send(chat_id, f"✂️ {salon_name}\n\nТаңдаңыз:", reply_markup=main_menu_kb())
+            await tg_send(
+               chat_id,
+               f"📸 Instagram:\n@emba_barbershop\n\n"
+               f"✂️ {salon_name}\n\n"
+               f"Таңдаңыз:",
+               reply_markup=main_menu_kb()
+               )
             return
-
     await tg_send(
         chat_id,
         "Салон сілтемесі арқылы кіріңіз.\nМысалы: t.me/yourbot?start=salon_1"
@@ -789,7 +795,12 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         await tg_edit(
             chat_id,
             message_id,
-            f"✅ Жазылдыңыз! (№{booking_id})\n\nҚажет болса төмендегі батырмамен отмена жасай аласыз:",
+            f"✅ Сіз сәтті жазылдыңыз!\n\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_name}\n"
+            f"📅 Күн: {draft.day}\n"
+            f"⏰ Уақыт: {draft.time}\n\n"
+            f"📸 Instagram:\n@emba_barbershop",
             reply_markup=booking_done_kb(booking_id)
             )
 
