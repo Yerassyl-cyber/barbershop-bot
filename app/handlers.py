@@ -12,7 +12,7 @@ from .db import (
     set_booking_calendar_event_id,
     get_user_active_bookings,
     get_booking_for_cancel,
-    get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id
+    get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id,add_closed_day
 )
 
 async def handle_my_bookings(chat_id: int, message_id: int):
@@ -175,7 +175,15 @@ def services_kb(salon_id: int):
     rows.append([{"text": "⬅️ Артқа", "callback_data": "menu:book"}])
     return {"inline_keyboard": rows}
 
-
+WEEKDAYS = {
+    0: "Дс/Пн",
+    1: "Сс/Вт",
+    2: "Ср/Ср",
+    3: "Бс/Чт",
+    4: "Жм/Пт",
+    5: "Сб/Сб",
+    6: "Жс/Вс",
+}
 def days_kb(salon_id: int):
     rows = []
     today = datetime.now()
@@ -188,7 +196,9 @@ def days_kb(salon_id: int):
         if iso in closed_days:
             continue
 
-        label = d.strftime("%a %d.%m")
+        weekday_label = WEEKDAYS[d.weekday()]
+        label = f"{weekday_label} {d.strftime('%d.%m')}"
+        
         rows.append([{"text": label, "callback_data": f"day:{iso}"}])
 
     rows.append([{"text": "⬅️ Артқа", "callback_data": "back:services"}])
@@ -220,7 +230,13 @@ def _find_service(services, service_id: str):
         if str(sid) == str(service_id):
             return title, price
     return "?", 0
-
+def admin_menu_kb():
+    return {
+        "inline_keyboard": [
+            [{"text": "📅 Күнді жабу", "callback_data": "admin_close_day"}],
+            [{"text": "📅 Күнді ашу", "callback_data": "admin_open_day"}],
+        ]
+    }
 
 async def handle_start(chat_id: int, start_payload: str | None = None):
     clear_draft(chat_id)
@@ -256,6 +272,33 @@ async def handle_prices(chat_id: int, message_id: int):
 
 async def handle_message(chat_id: int, text: str | None, message: dict):
     draft = get_draft(chat_id)
+    if text == "/admin":
+        if not draft.salon_id:
+            await tg_send(chat_id, "Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_send(chat_id, "❌ Сіз админ емессіз.")
+            return
+
+        await tg_send(chat_id, "Админ мәзірі:", reply_markup=admin_menu_kb())
+        return
+    if getattr(draft, "step", None) == "admin_wait_day_close":
+        day = (text or "").strip()
+
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except:
+            await tg_send(chat_id, "❌ Күн форматы қате. Мысалы: 2026-03-20")
+            return
+
+        await asyncio.to_thread(add_closed_day, draft.salon_id, day, "admin")
+        draft.step = None
+
+        await tg_send(chat_id, f"✅ Күн жабылды: {day}", reply_markup=admin_menu_kb())
+        return
     if text == "⬅️ Бас тарту":
         draft.step = None
         await tg_send(chat_id, "Таңдаңыз:", reply_markup=remove_reply_kb())
@@ -266,54 +309,39 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
         return
     # телефон күтіп тұрсақ
     if getattr(draft, "step", None) == "wait_phone":
+        draft.client_phone = text.strip()
+        draft.step = "wait_name"
 
-        contact = message.get("contact")
-        if not contact:
-            await tg_send(
-                chat_id,
-                "Телефонды тек батырма арқылы жіберіңіз.",
-                reply_markup=phone_request_kb()
-            )
-            return
+        await tg_send(chat_id, "👤 Атыңызды жазыңыз:")
+        return
+    
 
-        from_id = message["from"]["id"]
-        contact_user_id = contact.get("user_id")
-
-        if contact_user_id is None or int(contact_user_id) != int(from_id):
-            await tg_send(
-                chat_id,
-                "❌ Тек өз нөміріңізді жіберіңіз.",
-                reply_markup=phone_request_kb()
-            )
-            return
-
-        # телефон сақтау
-        draft.client_phone = contact.get("phone_number", "").strip()
-
-        # Telegram аты
-        first = (message["from"].get("first_name") or "").strip()
-        last = (message["from"].get("last_name") or "").strip()
-        draft.client_name = (first + " " + last).strip()
-
+    if getattr(draft, "step", None) == "wait_name":
+        draft.client_name = text.strip()
         draft.step = None
-
-        # reply keyboard алып тастау
-        await tg_send(chat_id, "✅ Телефон қабылданды.", reply_markup=remove_reply_kb())
-
-        # confirm хабарлама
         await tg_send(
             chat_id,
-            f"Тексеріңіз:\n\n"
-            f"👤 Аты: {getattr(draft, 'client_name', '-')}\n"
-            f"📞 Телефон: {getattr(draft, 'client_phone', '-')}",
-            reply_markup=client_confirm_kb()
-            )
+           f"Тексеріңіз:\n\n"
+           f"👤 Аты: {draft.client_name}\n"
+           f"📞 Телефон: {draft.client_phone}",
+           reply_markup=client_confirm_kb()
+           )
         return
+    
 
 async def handle_callback(chat_id: int, data: str, message_id: int):
     draft = get_draft(chat_id)
     if data.startswith("cancel:"):
         await handle_cancel(data, chat_id, message_id)
+        return
+    if data == "admin_close_day":
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        draft.step = "admin_wait_day_close"
+        await tg_edit(chat_id, message_id, "Жабылатын күнді жазыңыз:\n\nМысалы: 2026-03-20")
         return
     if data.startswith("admin_cancel:"):
         booking_id = int(data.split(":")[1])
@@ -518,26 +546,34 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data == "confirm:yes":
         draft.main_message_id = message_id
 
-    # 1) Егер телефон әлі жоқ болса — телефон сұраймыз (бронь жасамаймыз)
         if not getattr(draft, "client_phone", None):
             draft.step = "wait_phone"
+
             await tg_edit(
+                chat_id,
+                message_id,
+                "📞 Телефон нөміріңізді жазыңыз:",
+                reply_markup=None
+                )
+            return
+
+        if not getattr(draft, "client_name", None):
+            draft.step = "wait_name"
+
+            await tg_send(
+                chat_id,
+                "👤 Атыңызды жазыңыз:"
+                )
+            return
+
+        await tg_edit(
             chat_id,
             message_id,
-            "📞 Жазылуды аяқтау үшін телефон нөміріңізді жіберіңіз.\n\n"
-            "Төменнен шыққан батырманы басыңыз (қолмен жазу қабылданбайды).",
-            reply_markup=None  # inline кнопкаларды алып тастаймыз (қаласаң қалдыруға да болады)
+           f"Тексеріңіз:\n\n"
+           f"👤 Аты: {draft.client_name}\n"
+           f"📞 Телефон: {draft.client_phone}",
+            reply_markup=client_confirm_kb()
             )
-            await tg_send(chat_id, "👇 Батырманы басыңыз:", reply_markup=phone_request_kb())
-            return
-        await tg_edit(
-                    chat_id,
-                    message_id,
-                    f"Тексеріңіз:\n\n"
-                    f"👤 Аты: {getattr(draft, 'client_name', '-')}\n"
-                    f"📞 Телефон: {getattr(draft, 'client_phone', '-')}",
-                    reply_markup=client_confirm_kb()
-                    )   
         return
     if data == "client_edit":
         draft.client_phone = None
