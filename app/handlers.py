@@ -95,6 +95,8 @@ async def handle_cancel(callback_data, chat_id, message_id):
         service_title = row[11]
         day = row[5]
         time_ = row[6]
+        phone = row[10]
+        name = row[11]
         if not row:
             await tg_edit(chat_id, message_id, "⚠️ Запись табылмады.")
             return
@@ -120,15 +122,17 @@ async def handle_cancel(callback_data, chat_id, message_id):
         admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, salon_id)
 
         if admin_chat_id:
-            await tg_send(
-                admin_chat_id,
-                f"❌ Клиент отменил запись.\n\n"
-                f"№{booking_id}\n"
-                f"✂️ {master_name}\n"
-                f"🛠 {service_title}\n"
-                f"📅 {day} {time_}"
-                )
-        await tg_send(
+          await tg_send(
+              admin_chat_id,
+              f"❌ Клиент отменил запись.\n\n"
+              f"№{booking_id}\n"
+              f"👤 {name}\n"
+              f"📞 {phone}\n"
+              f"✂️ {master_name}\n"
+              f"🛠 {service_title}\n"
+              f"📅 {day} {time_}"
+              )
+          await tg_send(
                 chat_id,
                 f"❌ Запись отменена.\n\n"
                 f"✂️ Мастер: {master_name}\n"
