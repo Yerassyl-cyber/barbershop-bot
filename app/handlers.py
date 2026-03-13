@@ -33,11 +33,9 @@ async def handle_my_bookings(chat_id: int, message_id: int):
         booking_id = row[0]
         day = row[1]
         time_ = row[2]
-        status = row[3]
         master_name = row[4] or "-"
         service_title = row[5] or "-"
         price = row[6]
-
         text += (
             f"№{booking_id}\n"
             f"✂️ Мастер: {master_name}\n"
@@ -45,7 +43,7 @@ async def handle_my_bookings(chat_id: int, message_id: int):
             f"📅 Күн: {day}\n"
             f"⏰ Уақыт: {time_}\n"
             f"💳 Баға: {price} тг\n"
-            f"📌 Статус: {status}\n\n"
+            
         )
 
     await tg_edit(
@@ -459,20 +457,19 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             client_name = row[3] or "-"
             day = row[4]
             time_ = row[5]
-            master_name = row[7] or "-"
-            service_title = row[8] or "-"
-            price = row[9]
+            price = row[6]           # ✅ ОСЫ ЖЕР ТҮЗЕТІЛДІ
+            master_name = row[8] or "-"
+            service_title = row[9] or "-"
 
             text += (
-                f"№{booking_id}\n"
-                f"👤 Клиент: {client_name}\n"
-                f"📞 Телефон: {client_phone}\n"
-                f"⏰ Уақыт: {time_}\n"
-                f"✂️ Мастер: {master_name}\n"
-                f"🛠 Қызмет: {service_title}\n"
-                f"💳 Баға: {price} тг\n"
-             
-                )   
+            f"№{booking_id}\n"
+            f"👤 Клиент: {client_name}\n"
+            f"📞 Телефон: {client_phone}\n"
+            f"⏰ Уақыт: {time_}\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_title}\n"
+            f"💳 Баға: {price} тг\n\n"
+            )   
 
             keyboard.append([
                 {"text": f"❌ Отменить №{booking_id}", "callback_data": f"admin_cancel:{booking_id}"}
