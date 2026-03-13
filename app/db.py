@@ -148,7 +148,27 @@ def init_db():
         """)
 
         conn.commit()
+def get_closed_days(salon_id: int):
+    sql = """
+    SELECT day
+    FROM dbo.closed_days
+    WHERE salon_id = ?
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        rows = cur.execute(sql, salon_id).fetchall()
+        return [str(r[0]) for r in rows]
 
+
+def add_closed_day(salon_id: int, day: str, note: str | None = None):
+    sql = """
+    INSERT INTO dbo.closed_days (salon_id, day, note)
+    VALUES (?, ?, ?)
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, salon_id, day, note)
+        conn.commit()
 
 def get_salon_admin_chat_id(salon_id: int) -> Optional[int]:
     sql = "SELECT admin_chat_id FROM dbo.salons WHERE id = ?"

@@ -3,6 +3,7 @@ from .state import get_draft, clear_draft,clear_booking_fields  # немесе c
 from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
+from .db import get_closed_days
 from .calendar_service import create_calendar_event, delete_calendar_event
 from .db import (
     get_salon_by_start_code,
@@ -119,7 +120,11 @@ async def handle_cancel(callback_data, chat_id, message_id):
     except Exception as e:
         print(f"CANCEL ERROR: {e}")
         await tg_send(chat_id, f"⚠️ Отмена кезінде қате шықты: {e}")
-TIMES = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30"]
+TIMES = [
+    "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+    "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
+    "18:00", "18:30"
+]
 
 
 def main_menu_kb():
@@ -158,17 +163,23 @@ def services_kb(salon_id: int):
     return {"inline_keyboard": rows}
 
 
-def days_kb():
+def days_kb(salon_id: int):
     rows = []
     today = datetime.now()
+    closed_days = set(get_closed_days(salon_id))
+
     for i in range(5):
         d = today + timedelta(days=i)
-        label = d.strftime("%a %d.%m")
         iso = d.strftime("%Y-%m-%d")
+
+        if iso in closed_days:
+            continue
+
+        label = d.strftime("%a %d.%m")
         rows.append([{"text": label, "callback_data": f"day:{iso}"}])
+
     rows.append([{"text": "⬅️ Артқа", "callback_data": "back:services"}])
     return {"inline_keyboard": rows}
-
 
 def times_kb():
     rows = []
@@ -331,7 +342,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data.startswith("service:"):
         service_id = data.split(":", 1)[1]
         draft.service_id = str(service_id)
-        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb(draft.salon_id))
         return
 
     if data == "back:services":
@@ -348,7 +359,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         return
 
     if data == "back:days":
-        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb())
+        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:",reply_markup=days_kb(draft.salon_id))
         return
 
     # ----------------------------
@@ -394,7 +405,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
                     chat_id,
                     message_id,
                     "Күн таңдалмаған. Қайтадан таңдаңыз.",
-                    reply_markup=days_kb()
+                    reply_markup=days_kb(draft.salon_id)
                 )
                 return
 
