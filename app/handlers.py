@@ -792,16 +792,15 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
         if admin_chat_id:
             admin_text = (
-            f"🆕 Жаңа запись! №{booking_id}\n\n"
-            f"👤 Клиент chat_id: {chat_id}\n"
-            f"📞 Тел: {getattr(draft,'client_phone','-')}\n"
-            f"✂️ Мастер: {master_name}\n"
-            f"🛠 Қызмет: {service_name}\n"
-            f"📅 Күн: {draft.day}\n"
-            f"⏰ Уақыт: {draft.time}\n"
-            f"💳 Баға: {price} тг\n"
-            f"Статус: pending"
-            )
+               f"🆕 Жаңа запись! №{booking_id}\n\n"
+               f"👤 Клиент: {getattr(draft, 'client_name', '-')}\n"
+               f"📞 Тел: {getattr(draft, 'client_phone', '-')}\n"
+               f"✂️ Мастер: {master_name}\n"
+               f"🛠 Қызмет: {service_name}\n"
+               f"📅 Күн: {draft.day}\n"
+               f"⏰ Уақыт: {draft.time}\n"
+               f"💳 Баға: {price} тг"
+               )      
             await tg_send(
                 admin_chat_id,
                 admin_text,
