@@ -457,9 +457,9 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             client_name = row[3] or "-"
             day = row[4]
             time_ = row[5]
-            price = row[6]           # ✅ ОСЫ ЖЕР ТҮЗЕТІЛДІ
-            master_name = row[8] or "-"
-            service_title = row[9] or "-"
+            price = row[8]           # ✅ ОСЫ ЖЕР ТҮЗЕТІЛДІ
+            master_name = row[6] or "-"
+            service_title = row[7] or "-"
 
             text += (
             f"№{booking_id}\n"
