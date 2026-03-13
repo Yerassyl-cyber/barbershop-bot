@@ -186,7 +186,34 @@ def remove_closed_day(salon_id: int, day: str):
         cur = conn.cursor()
         cur.execute(sql, salon_id, day)
         conn.commit()
-        
+def get_active_bookings_by_salon_and_day(salon_id: int, day: str):
+    sql = """
+    SELECT
+        b.id,
+        b.user_chat_id,
+        b.day,
+        b.time,
+        b.status,
+        m.name AS master_name,
+        s.title AS service_title,
+        b.price,
+        b.calendar_event_id
+    FROM dbo.bookings b
+    LEFT JOIN dbo.masters m
+        ON CAST(m.id AS NVARCHAR(MAX)) = CAST(b.master_id AS NVARCHAR(MAX))
+       AND m.salon_id = b.salon_id
+    LEFT JOIN dbo.services s
+        ON CAST(s.id AS NVARCHAR(MAX)) = CAST(b.service_id AS NVARCHAR(MAX))
+       AND s.salon_id = b.salon_id
+    WHERE b.salon_id = ?
+      AND b.day = ?
+      AND b.status IN ('pending', 'approved')
+    ORDER BY b.time
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        return cur.execute(sql, salon_id, day).fetchall()
+    
 def get_salon_admin_chat_id(salon_id: int) -> Optional[int]:
     sql = "SELECT admin_chat_id FROM dbo.salons WHERE id = ?"
     with get_conn() as conn:

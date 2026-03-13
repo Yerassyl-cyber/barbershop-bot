@@ -10,7 +10,7 @@ from .db import (
     insert_booking,
     is_slot_taken,
     set_booking_calendar_event_id,
-    get_user_active_bookings,
+    get_user_active_bookings,get_active_bookings_by_salon_and_day,
     get_booking_for_cancel,remove_closed_day,
     get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id,add_closed_day
 )
@@ -240,6 +240,7 @@ def _find_service(services, service_id: str):
 def admin_menu_kb():
     return {
         "inline_keyboard": [
+            [{"text": "📋 Записьтер", "callback_data": "admin_bookings_days"}],
             [{"text": "📅 Күнді жабу", "callback_data": "admin_close_day"}],
             [{"text": "📅 Күнді ашу", "callback_data": "admin_open_day"}],
         ]
@@ -356,6 +357,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data.startswith("cancel:"):
         await handle_cancel(data, chat_id, message_id)
         return
+    
     if data == "admin_close_day":
         admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
         if not admin_chat_id or int(admin_chat_id) != int(chat_id):
@@ -380,6 +382,95 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             chat_id,
             message_id,
             "Ашылатын күнді жазыңыз:\n\nМысалы: 2026-03-20"
+            )
+        return
+    if data == "admin_bookings_days":
+        if not draft.salon_id:
+            await tg_edit(chat_id, message_id, "❌ Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        rows = []
+        today = datetime.now()
+
+        for i in range(5):
+            d = today + timedelta(days=i)
+            iso = d.strftime("%Y-%m-%d")
+            weekday_label = WEEKDAYS[d.weekday()]
+            label = f"{weekday_label} {d.strftime('%d.%m')}"
+            rows.append([{"text": label, "callback_data": f"admin_bookings_day:{iso}"}])
+
+        rows.append([{"text": "⬅️ Артқа", "callback_data": "menu:back"}])
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Қай күннің записьтерін көргіңіз келеді?",
+            reply_markup={"inline_keyboard": rows}
+            )
+        return
+    if data.startswith("admin_bookings_day:"):
+        if not draft.salon_id:
+            await tg_edit(chat_id, message_id, "❌ Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        day = data.split(":", 1)[1]
+
+        rows = await asyncio.to_thread(
+            get_active_bookings_by_salon_and_day,
+            draft.salon_id,
+            day
+            )
+
+        if not rows:
+            await tg_edit(
+                chat_id,
+                message_id,
+                f"Бұл күнге запись жоқ.\n\n📅 {day}",
+                reply_markup=admin_menu_kb()
+                )
+            return
+
+        text = f"📋 Записьтер\n📅 {day}\n\n"
+        keyboard = []
+
+        for row in rows:
+            booking_id = row[0]
+            time_ = row[3]
+            status = row[4]
+            master_name = row[5] or "-"
+            service_title = row[6] or "-"
+            price = row[7]
+
+            text += (
+                f"№{booking_id}\n"
+                f"⏰ Уақыт: {time_}\n"
+                f"✂️ Мастер: {master_name}\n"
+                f"🛠 Қызмет: {service_title}\n"
+                f"💳 Баға: {price} тг\n"
+                f"📌 Статус: {status}\n\n"
+                )
+
+            keyboard.append([
+                {"text": f"❌ Отменить №{booking_id}", "callback_data": f"admin_cancel:{booking_id}"}
+                ])
+
+        keyboard.append([{"text": "⬅️ Күндерге қайту", "callback_data": "admin_bookings_days"}])
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            text,
+            reply_markup={"inline_keyboard": keyboard}
             )
         return
     if data.startswith("admin_cancel:"):
