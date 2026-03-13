@@ -1,9 +1,7 @@
 from .telegram_api import tg_send, tg_edit
 from .state import get_draft, clear_draft,clear_booking_fields  # немесе clear_booking_fields
-from .db import get_salon_admin_chat_id
 import asyncio
 from datetime import datetime, timedelta
-from .db import get_closed_days
 from .calendar_service import create_calendar_event, delete_calendar_event
 from .db import (
     get_salon_by_start_code,
@@ -13,9 +11,9 @@ from .db import (
     is_slot_taken,
     set_booking_calendar_event_id,
     get_user_active_bookings,
-    get_booking_for_cancel
+    get_booking_for_cancel,
+    get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id
 )
-from .db import cancel_booking
 
 async def handle_my_bookings(chat_id: int, message_id: int):
     rows = await asyncio.to_thread(get_user_active_bookings, chat_id)
@@ -73,6 +71,14 @@ def my_bookings_kb(rows):
 
     return {"inline_keyboard": keyboard}
 
+def client_confirm_kb():
+    return {
+        "inline_keyboard": [
+            [{"text": "✅ Дұрыс", "callback_data": "client_ok"}],
+            [{"text": "✏️ Өзгерту", "callback_data": "client_edit"}],
+        ]
+    }
+
 def booking_done_kb(booking_id: int):
     return {
         "inline_keyboard": [
@@ -109,7 +115,14 @@ async def handle_cancel(callback_data, chat_id, message_id):
 
         if calendar_event_id:
             await asyncio.to_thread(delete_calendar_event, str(calendar_event_id))
+        salon_id = row[2]
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, salon_id)
 
+        if admin_chat_id:
+            await tg_send(
+                admin_chat_id,
+                f"❌ Клиент записьті отмена жасады.\n\n№{row_booking_id}"
+                )
         await tg_edit(
             chat_id,
             message_id,
@@ -290,16 +303,48 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
         # confirm хабарлама
         await tg_send(
             chat_id,
-            "Енді жазылуды растаңыз:",
-            reply_markup=confirm_kb()
-        )
-
+            f"Тексеріңіз:\n\n"
+            f"👤 Аты: {getattr(draft, 'client_name', '-')}\n"
+            f"📞 Телефон: {getattr(draft, 'client_phone', '-')}",
+            reply_markup=client_confirm_kb()
+            )
         return
 
 async def handle_callback(chat_id: int, data: str, message_id: int):
     draft = get_draft(chat_id)
     if data.startswith("cancel:"):
         await handle_cancel(data, chat_id, message_id)
+        return
+    if data.startswith("admin_cancel:"):
+        booking_id = int(data.split(":")[1])
+        row = await asyncio.to_thread(get_booking_full_info, booking_id)
+        if not row:
+            await tg_edit(chat_id, message_id, "⚠️ Запись табылмады.")
+            return
+
+        client_chat_id = row[1]
+        row_status = row[8]
+        calendar_event_id = row[9]
+
+        if row_status == "cancelled":
+            await tg_edit(chat_id, message_id, "ℹ️ Бұл запись бұрыннан отмена жасалған.")
+            return
+
+        if calendar_event_id:
+            await asyncio.to_thread(delete_calendar_event, str(calendar_event_id))
+
+        await asyncio.to_thread(cancel_booking, booking_id)
+
+        await tg_send(
+            client_chat_id,
+            f"❌ Администратор сіздің жазылуыңызды болдырмады.\n\n№{booking_id}"
+            )
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            f"✅ Запись отменена. №{booking_id}"
+            )
         return
     # ----------------------------
     # MAIN MENU
@@ -485,12 +530,28 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             )
             await tg_send(chat_id, "👇 Батырманы басыңыз:", reply_markup=phone_request_kb())
             return
+        await tg_edit(
+                    chat_id,
+                    message_id,
+                    f"Тексеріңіз:\n\n"
+                    f"👤 Аты: {getattr(draft, 'client_name', '-')}\n"
+                    f"📞 Телефон: {getattr(draft, 'client_phone', '-')}",
+                    reply_markup=client_confirm_kb()
+                    )   
+        return
+    if data == "client_edit":
+        draft.client_phone = None
+        draft.step = "wait_phone"
 
-    # 2) Егер аты-жөні әлі жоқ болса — Telegram профилінен алып confirm жасаймыз (optional)
-        if not getattr(draft, "client_name", None):
-            # Telegram аты callback-та жоқ болады, сондықтан ең оңайы:
-        # - атын кейін контакт келген message handler-де аламыз (төменде көрсетем)
-            pass
+        await tg_edit(
+            chat_id,
+            message_id,
+            "📞 Телефонды қайта жіберіңіз:",
+            reply_markup=None
+            )
+        await tg_send(chat_id, "👇 Батырманы басыңыз:", reply_markup=phone_request_kb())
+        return
+    if data == "client_ok":
         if not (draft.salon_id and draft.master_id and draft.service_id and draft.day and draft.time):
             await tg_edit(chat_id, message_id, "⚠️ Дерек толық емес. Қайтадан бастап көріңіз.", reply_markup=main_menu_kb())
             return
@@ -569,11 +630,19 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             f"💳 Баға: {price} тг\n"
             f"Статус: pending"
             )
-            await tg_send(admin_chat_id, admin_text)
+            await tg_send(
+                admin_chat_id,
+                admin_text,
+                reply_markup={
+                    "inline_keyboard": [
+                        [{"text": "❌ Записьті болдырмау", "callback_data": f"admin_cancel:{booking_id}"}]
+                        ]
+                    }
+                )
 
         clear_booking_fields(chat_id)
         return
-   
+    
     if data == "confirm:no":
         await tg_edit(chat_id, message_id, "❌ Болдырылмады. Уақытты қайта таңдаңыз:", reply_markup=times_kb())
         draft.time = None
