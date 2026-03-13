@@ -191,9 +191,10 @@ def get_active_bookings_by_salon_and_day(salon_id: int, day: str):
     SELECT
         b.id,
         b.user_chat_id,
+        b.client_phone,
+        b.client_name,
         b.day,
         b.time,
-        b.status,
         m.name AS master_name,
         s.title AS service_title,
         b.price,
@@ -261,13 +262,15 @@ def insert_booking(
     service_id: str,
     day: str,
     time: str,
-    price: int
+    price: int,
+    client_phone: str | None = None,
+    client_name: str | None = None
 ) -> int:
     sql = """
     INSERT INTO dbo.bookings
-    (user_chat_id, salon_id, master_id, service_id, day, time, price, status)
+    (user_chat_id, salon_id, master_id, service_id, day, time, price, status, client_phone, client_name)
     OUTPUT INSERTED.id
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending');
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?);
     """
 
     with get_conn() as conn:
@@ -280,7 +283,9 @@ def insert_booking(
             service_id,
             day,
             time,
-            price
+            price,
+            client_phone,
+            client_name
         ).fetchone()
         conn.commit()
         return int(row[0])

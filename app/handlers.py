@@ -274,7 +274,7 @@ async def handle_prices(chat_id: int, message_id: int):
 
     text = "Бағалар:\n"
     for sid, title, price in services:
-        text += f"- {title}: {price} тг\n"
+        text += f"{title}: {price} тг\n"
 
     await tg_edit(chat_id, message_id, text + "\n⬅️ Артқа қайтайық:", reply_markup=main_menu_kb())
 
@@ -445,20 +445,24 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         for row in rows:
             booking_id = row[0]
-            time_ = row[3]
-            status = row[4]
-            master_name = row[5] or "-"
-            service_title = row[6] or "-"
-            price = row[7]
+            client_phone = row[2] or "-"
+            client_name = row[3] or "-"
+            day = row[4]
+            time_ = row[5]
+            master_name = row[7] or "-"
+            service_title = row[8] or "-"
+            price = row[9]
 
             text += (
                 f"№{booking_id}\n"
+                f"👤 Клиент: {client_name}\n"
+                f"📞 Телефон: {client_phone}\n"
                 f"⏰ Уақыт: {time_}\n"
                 f"✂️ Мастер: {master_name}\n"
                 f"🛠 Қызмет: {service_title}\n"
                 f"💳 Баға: {price} тг\n"
-                f"📌 Статус: {status}\n\n"
-                )
+             
+                )   
 
             keyboard.append([
                 {"text": f"❌ Отменить №{booking_id}", "callback_data": f"admin_cancel:{booking_id}"}
@@ -744,16 +748,18 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             return
 
         booking_id = await asyncio.to_thread(
-            insert_booking,
-            chat_id,          # 1) user_chat_id
-            draft.salon_id,   # 2) salon_id
-            draft.master_id,
-            draft.service_id,
-            draft.day,
-            draft.time,
-            int(price),
-            )
-        salon_name = "Nur Barber"
+                insert_booking,
+                chat_id,
+                draft.salon_id,
+                draft.master_id,
+                draft.service_id,
+                draft.day,
+                draft.time,
+                int(price),
+                getattr(draft, "client_phone", None),
+                getattr(draft, "client_name", None),
+                )
+        salon_name = "TN Barbershop"
         calendar_event_id = None
         try:
             calendar_event_id =await asyncio.to_thread(
