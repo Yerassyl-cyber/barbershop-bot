@@ -11,7 +11,7 @@ from .db import (
     is_slot_taken,
     set_booking_calendar_event_id,
     get_user_active_bookings,
-    get_booking_for_cancel,
+    get_booking_for_cancel,remove_closed_day,
     get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id,add_closed_day
 )
 
@@ -298,6 +298,21 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
         draft.step = None
 
         await tg_send(chat_id, f"✅ Күн жабылды: {day}", reply_markup=admin_menu_kb())
+        return
+    
+    if getattr(draft, "step", None) == "admin_wait_day_open":
+        day = (text or "").strip()
+
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except:
+            await tg_send(chat_id, "❌ Күн форматы қате. Мысалы: 2026-03-20")
+            return
+
+        await asyncio.to_thread(remove_closed_day, draft.salon_id, day)
+        draft.step = None
+
+        await tg_send(chat_id, f"✅ Күн ашылды: {day}", reply_markup=admin_menu_kb())
         return
     if text == "⬅️ Бас тарту":
         draft.step = None

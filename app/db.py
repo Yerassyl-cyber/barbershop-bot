@@ -162,14 +162,31 @@ def get_closed_days(salon_id: int):
 
 def add_closed_day(salon_id: int, day: str, note: str | None = None):
     sql = """
-    INSERT INTO dbo.closed_days (salon_id, day, note)
-    VALUES (?, ?, ?)
+    IF NOT EXISTS (
+        SELECT 1
+        FROM dbo.closed_days
+        WHERE salon_id = ? AND day = ?
+    )
+    BEGIN
+        INSERT INTO dbo.closed_days (salon_id, day, note)
+        VALUES (?, ?, ?)
+    END
     """
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(sql, salon_id, day, note)
+        cur.execute(sql, salon_id, day, salon_id, day, note)
         conn.commit()
-
+        
+def remove_closed_day(salon_id: int, day: str):
+    sql = """
+    DELETE FROM dbo.closed_days
+    WHERE salon_id = ? AND day = ?
+    """
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, salon_id, day)
+        conn.commit()
+        
 def get_salon_admin_chat_id(salon_id: int) -> Optional[int]:
     sql = "SELECT admin_chat_id FROM dbo.salons WHERE id = ?"
     with get_conn() as conn:
