@@ -90,13 +90,14 @@ async def handle_cancel(callback_data, chat_id, message_id):
     try:
         booking_id = int(callback_data.split(":")[1])
 
-        row = await asyncio.to_thread(get_booking_for_cancel, booking_id)
-
+        row = await asyncio.to_thread(get_booking_full_info, booking_id)
+        master_name = row[10]
+        service_title = row[11]
+        day = row[5]
+        time_ = row[6]
         if not row:
             await tg_edit(chat_id, message_id, "⚠️ Запись табылмады.")
             return
-
-        row_booking_id = row[0]
         row_user_chat_id = row[1]
         row_status = row[8]
         calendar_event_id = row[9]   # 🔥 МІНЕ ОСЫ ЖЕР ДҰРЫС БОЛУ КЕРЕК
@@ -121,14 +122,20 @@ async def handle_cancel(callback_data, chat_id, message_id):
         if admin_chat_id:
             await tg_send(
                 admin_chat_id,
-                f"❌ Клиент записьті отмена жасады.\n\n№{row_booking_id}"
+                f"❌ Клиент отменил запись.\n\n"
+                f"№{booking_id}\n"
+                f"✂️ {master_name}\n"
+                f"🛠 {service_title}\n"
+                f"📅 {day} {time_}"
                 )
-        await tg_edit(
-            chat_id,
-            message_id,
-            f"❌ Запись отменена. №{row_booking_id}",
-            reply_markup=main_menu_kb()
-        )
+        await tg_send(
+                chat_id,
+                f"❌ Запись отменена.\n\n"
+                f"✂️ Мастер: {master_name}\n"
+                f"🛠 Қызмет: {service_title}\n"
+                f"📅 Күн: {day}\n"
+                f"⏰ Уақыт: {time_}"
+                )
 
     except Exception as e:
         print(f"CANCEL ERROR: {e}")
