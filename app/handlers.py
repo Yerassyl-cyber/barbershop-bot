@@ -365,6 +365,23 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         draft.step = "admin_wait_day_close"
         await tg_edit(chat_id, message_id, "Жабылатын күнді жазыңыз:\n\nМысалы: 2026-03-20")
         return
+    if data == "admin_open_day":
+        if not draft.salon_id:
+            await tg_edit(chat_id, message_id, "❌ Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        draft.step = "admin_wait_day_open"
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Ашылатын күнді жазыңыз:\n\nМысалы: 2026-03-20"
+            )
+        return
     if data.startswith("admin_cancel:"):
         booking_id = int(data.split(":")[1])
         row = await asyncio.to_thread(get_booking_full_info, booking_id)
