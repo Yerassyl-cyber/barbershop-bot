@@ -29,6 +29,16 @@ def remove_closed_slot(salon_id: int, master_id: str | None, day: str, time: str
         conn.execute(sql, salon_id, day, time, master_id, master_id)
         conn.commit()
         
+def get_active_salons():
+    sql = """
+    SELECT id, name
+    FROM dbo.salons
+    WHERE is_active = 1
+    ORDER BY id
+    """
+    with get_conn() as conn:
+        return conn.execute(sql).fetchall()
+
 def is_slot_closed(salon_id: int, master_id: str, day: str, time: str) -> bool:
     sql = """
     SELECT TOP 1 id

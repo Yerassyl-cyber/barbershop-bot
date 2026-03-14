@@ -8,6 +8,7 @@ from .db import (
     get_masters_by_salon,
     get_services_by_salon,
     remove_closed_slot,
+    get_active_salons,
     insert_booking,
     is_slot_closed,
     is_slot_taken,
@@ -17,6 +18,17 @@ from .db import (
     get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id,add_closed_day
 )
 
+def salons_kb():
+    salons = get_active_salons()
+
+    rows = [
+        [{"text": name, "callback_data": f"choose_salon:{sid}"}]
+        for sid, name in salons
+    ]
+
+    rows.append([{"text": "⬅️ Артқа", "callback_data": "menu:back"}])
+
+    return {"inline_keyboard": rows}
 async def handle_my_bookings(chat_id: int, message_id: int):
     rows = await asyncio.to_thread(get_user_active_bookings, chat_id)
 
@@ -166,12 +178,25 @@ def has_available_slots(salon_id: int, master_id: str, day: str) -> bool:
 def main_menu_kb():
     return {
         "inline_keyboard": [
+            [{"text": "🏢 Салон таңдау", "callback_data": "menu:salons"}],
             [{"text": "📅 Запись", "callback_data": "menu:book"}],
             [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
             [{"text": "📋 Менің жазылуларым", "callback_data": "menu:my_bookings"}],
             [{"text": "📸 Instagram", "url": "https://instagram.com/emba_barbershop"}]
         ]
     }
+def persistent_menu_kb():
+    return {
+        "keyboard": [
+            [{"text": "🏢 Салон таңдау"}],
+            [{"text": "📅 Запись"}],
+            [{"text": "💰 Бағалар"}],
+            [{"text": "📋 Менің жазылуларым"}],
+        ],
+        "resize_keyboard": True,
+        "persistent": True
+    }
+
 
 def phone_request_kb():
     return {
@@ -301,18 +326,13 @@ async def handle_start(chat_id: int, start_payload: str | None = None):
         if salon:
             salon_id, salon_name = salon
             draft.salon_id = int(salon_id)
-            await tg_send(
-               chat_id,
-               f"📸 Instagram:\n@emba_barbershop\n\n"
-               f"✂️ {salon_name}\n\n"
-               f"Таңдаңыз:",
-               reply_markup=main_menu_kb()
-               )
-            return
+
     await tg_send(
         chat_id,
-        "Салон сілтемесі арқылы кіріңіз.\nМысалы: t.me/yourbot?start=salon_1"
+        "Қош келдіңіз! Төмендегі мәзірден таңдаңыз:",
+        reply_markup=persistent_menu_kb()
     )
+
 
 
 async def handle_prices(chat_id: int, message_id: int):
@@ -331,6 +351,79 @@ async def handle_prices(chat_id: int, message_id: int):
 
 async def handle_message(chat_id: int, text: str | None, message: dict):
     draft = get_draft(chat_id)
+    if text == "🏢 Салон таңдау":
+        await tg_send(
+            chat_id,
+            "Салонды таңдаңыз:",
+            reply_markup=salons_kb()
+            )   
+        return
+
+    if text == "📅 Запись":
+        if not draft.salon_id:
+            await tg_send(
+                chat_id,
+                "Алдымен салон таңдаңыз:",
+                reply_markup=salons_kb()
+                )
+            return
+
+        clear_booking_fields(chat_id)
+        draft = get_draft(chat_id)
+
+        await tg_send(
+            chat_id,
+            "Мастерді таңдаңыз:",
+            reply_markup=masters_kb(draft.salon_id)
+            )
+        return
+    
+    if text == "💰 Бағалар":
+        if not draft.salon_id:
+            await tg_send(
+                chat_id,
+                "Алдымен салон таңдаңыз:",
+                reply_markup=salons_kb()
+                )
+            return
+
+        services = await asyncio.to_thread(get_services_by_salon, draft.salon_id)
+
+        msg = "💰 Бағалар:\n\n"
+        for sid, title, price in services:
+            msg += f"{title}: {price} тг\n"
+            
+        await tg_send(chat_id, msg)
+        return
+
+    if text == "📋 Менің жазылуларым":
+        rows = await asyncio.to_thread(get_user_active_bookings, chat_id)
+        
+        if not rows:
+            await tg_send(chat_id, "Сізде белсенді жазылу жоқ.")
+            return
+
+        text_out = "📋 Менің жазылуларым:\n\n"
+        for row in rows:
+            booking_id = row[0]
+            day = row[1]
+            time_ = row[2]
+            master_name = row[4] or "-"
+            service_title = row[5] or "-"
+            price = row[6]
+
+            text_out += (
+            f"№{booking_id}\n"
+            f"✂️ Мастер: {master_name}\n"
+            f"🛠 Қызмет: {service_title}\n"
+            f"📅 Күн: {day}\n"
+            f"⏰ Уақыт: {time_}\n"
+            f"💳 Баға: {price} тг\n\n"
+        )
+
+        await tg_send(chat_id, text_out)
+        return
+
     if text == "/admin":
         if not draft.salon_id:
             await tg_send(chat_id, "Салон таңдалмаған.")
@@ -400,14 +493,14 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
             None,
             day,
             time_
-            )
+        )
 
         draft.step = None
         draft.tmp_day = None
 
         await tg_send(
             chat_id,
-            f"✅ Уақыт жабылды:\n📅 {time_} / {draft.tmp_day}",
+            f"✅ Уақыт жабылды:\n📅 {day}\n⏰ {time_}",
             reply_markup=admin_menu_kb()
             )
         return
@@ -455,12 +548,14 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
         draft.step = None
         draft.tmp_day = None
         draft.tmp_time = None
-        await tg_send(chat_id, "Таңдаңыз:", reply_markup=remove_reply_kb())
-        if draft.salon_id:
-            await tg_send(chat_id, "Негізгі мәзір:", reply_markup=main_menu_kb())
-        else:
-             await tg_send(chat_id, "Салон таңдалмаған. /start арқылы қайта кіріңіз.")
+
+        await tg_send(
+            chat_id,
+            "Таңдаңыз:",
+            reply_markup=persistent_menu_kb()
+            )
         return
+
     # телефон күтіп тұрсақ
     if getattr(draft, "step", None) == "wait_phone":
         draft.client_phone = text.strip()
@@ -682,7 +777,12 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
         return
     if data == "menu:book":
         if not draft.salon_id:
-            await tg_edit(chat_id, message_id, "Салон таңдалмаған. /start link арқылы кіріңіз.")
+            await tg_edit(
+                chat_id,
+                message_id,
+                "Алдымен салон таңдаңыз:",
+                reply_markup=salons_kb()
+                )
             return
 
         # салонды сақтап, қалғанын тазалау
@@ -691,6 +791,19 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         await tg_edit(chat_id, message_id, "Мастерді таңдаңыз:", reply_markup=masters_kb(draft.salon_id))
         return
+    if data.startswith("choose_salon:"):
+        salon_id = int(data.split(":")[1])
+
+        draft.salon_id = salon_id
+        
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Салон таңдалды ✅\n\nТаңдаңыз:",
+            reply_markup=main_menu_kb()
+            )
+        return
+
 
     if data == "menu:back":
         await tg_edit(chat_id, message_id, "Таңдаңыз:", reply_markup=main_menu_kb())
