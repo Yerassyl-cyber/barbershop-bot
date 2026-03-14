@@ -51,7 +51,7 @@ def create_calendar_event(
     end_dt = start_dt + timedelta(minutes=duration_minutes)
 
     event = {
-        "summary": f"{service_name} — {master_name}",
+        "summary": f"{service_name} — {client_name or 'Клиент'}",
         "description": (
             f"Salon: {salon_name}\n"
             f"Master: {master_name}\n"

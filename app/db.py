@@ -17,7 +17,7 @@ def add_closed_slot(salon_id: int, master_id: str | None, day: str, time: str):
         conn.execute(sql, salon_id, master_id, day, time)
         conn.commit()
 
-def С(salon_id: int, master_id: str | None, day: str, time: str):
+def remove_closed_slot(salon_id: int, master_id: str | None, day: str, time: str):
     sql = """
     DELETE FROM dbo.closed_slots
     WHERE salon_id = ?
