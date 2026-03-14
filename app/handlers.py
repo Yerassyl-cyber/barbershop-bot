@@ -178,7 +178,7 @@ def has_available_slots(salon_id: int, master_id: str, day: str) -> bool:
 def main_menu_kb():
     return {
         "inline_keyboard": [
-            [{"text": "🏢 Салон таңдау", "callback_data": "menu:salons"}],
+    
             [{"text": "📅 Запись", "callback_data": "menu:book"}],
             [{"text": "💰 Бағалар", "callback_data": "menu:prices"}],
             [{"text": "📋 Менің жазылуларым", "callback_data": "menu:my_bookings"}],
