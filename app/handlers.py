@@ -857,7 +857,6 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
                 draft.salon_id,
                 draft.master_id,
                 draft.day,
-                draft.time,
                 selected_time
             )
 
