@@ -8,7 +8,40 @@ def get_conn():
         raise RuntimeError("SQL_CONN_STR орнатылмаған (Azure App Settings)")
     return pyodbc.connect(SQL_CONN_STR)
 
+def add_closed_slot(salon_id: int, master_id: str | None, day: str, time: str):
+    sql = """
+    INSERT INTO dbo.closed_slots (salon_id, master_id, day, time)
+    VALUES (?, ?, ?, ?)
+    """
+    with get_conn() as conn:
+        conn.execute(sql, salon_id, master_id, day, time)
+        conn.commit()
 
+def С(salon_id: int, master_id: str | None, day: str, time: str):
+    sql = """
+    DELETE FROM dbo.closed_slots
+    WHERE salon_id = ?
+      AND day = ?
+      AND time = ?
+      AND (master_id = ? OR (? IS NULL AND master_id IS NULL))
+    """
+    with get_conn() as conn:
+        conn.execute(sql, salon_id, day, time, master_id, master_id)
+        conn.commit()
+        
+def is_slot_closed(salon_id: int, master_id: str, day: str, time: str) -> bool:
+    sql = """
+    SELECT TOP 1 id
+    FROM dbo.closed_slots
+    WHERE salon_id = ?
+      AND day = ?
+      AND time = ?
+      AND (master_id = ? OR master_id IS NULL)
+    """
+    with get_conn() as conn:
+        row = conn.execute(sql, salon_id, day, time, master_id).fetchone()
+        return bool(row)
+    
 def init_db():
     with get_conn() as conn:
         cur = conn.cursor()

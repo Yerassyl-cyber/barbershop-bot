@@ -1,6 +1,6 @@
 import httpx
 from .config import TELEGRAM_API
-
+import asyncio
 client: httpx.AsyncClient | None = None
 
 async def init_client():
@@ -22,6 +22,13 @@ async def tg_send(chat_id: int, text: str, reply_markup: dict | None = None):
 
 import httpx
 
+async def delete_later(chat_id, message_id):
+    await asyncio.sleep(3)
+    try:
+        await tg_delete(chat_id, message_id)
+    except:
+        pass
+    
 async def tg_answer_callback(callback_query_id: str):
     try:
         await client.post(

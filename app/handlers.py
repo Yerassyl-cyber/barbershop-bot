@@ -1,4 +1,4 @@
-from .telegram_api import tg_send, tg_edit
+from .telegram_api import tg_send, tg_edit,tg_delete,delete_later
 from .state import get_draft, clear_draft,clear_booking_fields  # немесе clear_booking_fields
 import asyncio
 from datetime import datetime, timedelta
@@ -7,9 +7,11 @@ from .db import (
     get_salon_by_start_code,
     get_masters_by_salon,
     get_services_by_salon,
+    remove_closed_slot,
     insert_booking,
+    is_slot_closed,
     is_slot_taken,
-    set_booking_calendar_event_id,
+    set_booking_calendar_event_id, add_closed_slot,
     get_user_active_bookings,get_active_bookings_by_salon_and_day,
     get_booking_for_cancel,remove_closed_day,
     get_closed_days,get_booking_full_info, cancel_booking, get_salon_admin_chat_id,add_closed_day
@@ -147,6 +149,18 @@ TIMES = [
     "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
     "18:00", "18:30"
 ]
+def has_available_slots(salon_id: int, master_id: str, day: str) -> bool:
+    for t in TIMES:
+
+        if is_slot_closed(salon_id, master_id, day, t):
+            continue
+
+        if is_slot_taken(salon_id, master_id, day, t):
+            continue
+
+        return True
+
+    return False
 
 
 def main_menu_kb():
@@ -194,7 +208,7 @@ WEEKDAYS = {
     5: "Сб/Сб",
     6: "Жс/Вс",
 }
-def days_kb(salon_id: int):
+def days_kb(salon_id: int, master_id: str):
     rows = []
     today = datetime.now()
     closed_days = set(get_closed_days(salon_id))
@@ -206,24 +220,51 @@ def days_kb(salon_id: int):
         if iso in closed_days:
             continue
 
+        if not has_available_slots(salon_id, master_id, iso):
+            continue
+
         weekday_label = WEEKDAYS[d.weekday()]
         label = f"{weekday_label} {d.strftime('%d.%m')}"
-        
+
         rows.append([{"text": label, "callback_data": f"day:{iso}"}])
 
     rows.append([{"text": "⬅️ Артқа", "callback_data": "back:services"}])
     return {"inline_keyboard": rows}
 
-def times_kb():
+
+def times_kb(available_times: list[str]):
     rows = []
-    for i in range(0, len(TIMES), 2):
-        row = [{"text": TIMES[i], "callback_data": f"time:{TIMES[i]}"}]
-        if i + 1 < len(TIMES):
-            row.append({"text": TIMES[i + 1], "callback_data": f"time:{TIMES[i + 1]}"} )
+
+    for i in range(0, len(available_times), 2):
+        row = [
+            {
+                "text": available_times[i],
+                "callback_data": f"time:{available_times[i]}"
+            }
+        ]
+
+        if i + 1 < len(available_times):
+            row.append(
+                {
+                    "text": available_times[i + 1],
+                    "callback_data": f"time:{available_times[i + 1]}"
+                }
+            )
+
         rows.append(row)
+
     rows.append([{"text": "⬅️ Артқа", "callback_data": "back:days"}])
     return {"inline_keyboard": rows}
 
+def get_available_times_for_day(salon_id: int, master_id: str, day: str) -> list[str]:
+    available = []
+
+    for t in TIMES:
+        closed = is_slot_closed(salon_id, master_id, day, t)
+        if not closed:
+            available.append(t)
+
+    return available
 
 def confirm_kb():
     return {
@@ -246,6 +287,8 @@ def admin_menu_kb():
             [{"text": "📋 Записьтер", "callback_data": "admin_bookings_days"}],
             [{"text": "📅 Күнді жабу", "callback_data": "admin_close_day"}],
             [{"text": "📅 Күнді ашу", "callback_data": "admin_open_day"}],
+            [{"text": "⛔ Уақытты жабу", "callback_data": "admin_close_slot"}],
+            [{"text": "✅ Уақытты ашу", "callback_data": "admin_open_slot"}],
         ]
     }
 
@@ -330,8 +373,88 @@ async def handle_message(chat_id: int, text: str | None, message: dict):
 
         await tg_send(chat_id, f"✅ Күн ашылды: {day}", reply_markup=admin_menu_kb())
         return
+    if getattr(draft, "step", None) == "admin_wait_slot_close_day":
+        day = (text or "").strip()
+        
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except:
+            await tg_send(chat_id, "❌ Күн форматы қате. Мысалы: 2026-03-20")
+            return
+            
+        draft.tmp_day = day
+        draft.step = "admin_wait_slot_close_time"
+
+        await tg_send(chat_id, "Жабылатын уақытты жазыңыз:\n\nМысалы: 15:30")
+        return
+    if getattr(draft, "step", None) == "admin_wait_slot_close_time":
+        time_ = (text or "").strip()
+
+        if time_ not in TIMES:
+            await tg_send(chat_id, "❌ Уақыт қате. Мысалы: 15:30")
+            return
+        day = draft.tmp_day
+        await asyncio.to_thread(
+            add_closed_slot,
+            draft.salon_id,
+            None,
+            day,
+            time_
+            )
+
+        draft.step = None
+        draft.tmp_day = None
+
+        await tg_send(
+            chat_id,
+            f"✅ Уақыт жабылды:\n📅 {time_} / {draft.tmp_day}",
+            reply_markup=admin_menu_kb()
+            )
+        return
+    if getattr(draft, "step", None) == "admin_wait_slot_open_day":
+        day = (text or "").strip()
+
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except:
+            await tg_send(chat_id, "❌ Күн форматы қате. Мысалы: 2026-03-20")
+            return
+
+        draft.tmp_day = day
+        draft.step = "admin_wait_slot_open_time"
+
+        await tg_send(chat_id, "Ашылатын уақытты жазыңыз:\n\nМысалы: 15:30")
+        return
+    if getattr(draft, "step", None) == "admin_wait_slot_open_time":
+        time_ = (text or "").strip()
+
+        if time_ not in TIMES:
+            await tg_send(chat_id, "❌ Уақыт қате. Мысалы: 15:30")
+            return
+
+        day = draft.tmp_day
+
+        await asyncio.to_thread(
+            remove_closed_slot,
+            draft.salon_id,
+            None,
+            day,
+            time_
+            )
+
+        draft.step = None
+        draft.tmp_day = None
+
+        await tg_send(
+            chat_id,
+            f"✅ Уақыт ашылды:\n📅 {day}\n⏰ {time_}",
+            reply_markup=admin_menu_kb()
+            )
+        return
     if text == "⬅️ Бас тарту":
         draft.step = None
+        draft.tmp_day = None
+        draft.tmp_time = None
         await tg_send(chat_id, "Таңдаңыз:", reply_markup=remove_reply_kb())
         if draft.salon_id:
             await tg_send(chat_id, "Негізгі мәзір:", reply_markup=main_menu_kb())
@@ -365,7 +488,40 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data.startswith("cancel:"):
         await handle_cancel(data, chat_id, message_id)
         return
-    
+    if data == "admin_close_slot":
+        if not draft.salon_id:
+            await tg_edit(chat_id, message_id, "❌ Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        draft.step = "admin_wait_slot_close_day"
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Жабылатын уақыттың күнін жазыңыз:\n\nМысалы: 2026-03-20"
+            )
+        return
+    if data == "admin_open_slot":
+        if not draft.salon_id:
+            await tg_edit(chat_id, message_id, "❌ Салон таңдалмаған.")
+            return
+
+        admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
+        if not admin_chat_id or int(admin_chat_id) != int(chat_id):
+            await tg_edit(chat_id, message_id, "❌ Бұл бөлім тек админге.")
+            return
+
+        draft.step = "admin_wait_slot_open_day"
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Ашылатын уақыттың күнін жазыңыз:\n\nМысалы: 2026-03-20"
+            )
+        return
     if data == "admin_close_day":
         admin_chat_id = await asyncio.to_thread(get_salon_admin_chat_id, draft.salon_id)
         if not admin_chat_id or int(admin_chat_id) != int(chat_id):
@@ -556,7 +712,13 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data.startswith("service:"):
         service_id = data.split(":", 1)[1]
         draft.service_id = str(service_id)
-        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:", reply_markup=days_kb(draft.salon_id))
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Күнді таңдаңыз:",
+            reply_markup=days_kb(draft.salon_id, draft.master_id)
+            )
         return
 
     if data == "back:services":
@@ -569,12 +731,40 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
     if data.startswith("day:"):
         day = data.split(":", 1)[1]
         draft.day = day
-        await tg_edit(chat_id, message_id, "Уақытты таңдаңыз:", reply_markup=times_kb())
+        
+        available_times = await asyncio.to_thread(
+            get_available_times_for_day,
+            draft.salon_id,
+            draft.master_id,
+            draft.day
+            )
+
+        if not available_times:
+            await tg_edit(
+                chat_id,
+                message_id,
+                "Бұл күнге бос уақыт жоқ.",
+                reply_markup=days_kb(draft.salon_id, draft.master_id)
+                )
+            return
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Уақытты таңдаңыз:",
+            reply_markup=times_kb(available_times)
+            )
         return
 
     if data == "back:days":
-        await tg_edit(chat_id, message_id, "Күнді таңдаңыз:",reply_markup=days_kb(draft.salon_id))
+        await tg_edit(
+            chat_id,
+            message_id,
+            "Күнді таңдаңыз:",
+            reply_markup=days_kb(draft.salon_id, draft.master_id)
+            )
         return
+
 
     # ----------------------------
     # TIME -> IMMEDIATE BOOKING (логика өзгермейді)
@@ -584,8 +774,7 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 # ----------------------------
     if data.startswith("time:"):
         try:
-            t = data.split(":", 1)[1]
-            draft.time = t
+            selected_time = data.split(":", 1)[1]
 
             if not draft.salon_id:
                 await tg_edit(
@@ -645,24 +834,46 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
                 return
 
             _, service_name, price = service_row
+            closed = await asyncio.to_thread(
+                is_slot_closed,
+                draft.salon_id,
+                draft.master_id,
+                draft.day,
+                selected_time
+                )
 
+            if closed:
+                msg = await tg_send(
+                    chat_id,
+                    "⛔ Бұл уақыт администратор тарапынан жабылған."
+                    )
+
+                asyncio.create_task(
+                    delete_later(chat_id, msg["result"]["message_id"])
+                    )
+                return
             taken = await asyncio.to_thread(
                 is_slot_taken,
                 draft.salon_id,
                 draft.master_id,
                 draft.day,
-                draft.time
+                draft.time,
+                selected_time
             )
 
             if taken:
-                await tg_edit(
+                msg = await tg_send(
                     chat_id,
-                    message_id,
-                    "⚠️ Бұл уақыт бос емес. Басқа уақыт таңдаңыз:",
-                    reply_markup=times_kb()
+                    "⚠️ Бұл уақыт бос емес. Басқа уақыт таңдаңыз."
                 )
-                return
 
+                asyncio.create_task(
+                    delete_later(chat_id, msg["result"]["message_id"])
+                    )
+                return
+            
+            draft.time = selected_time
+            
             text = (
                 "Растайсыз ба?\n\n"
                 f"✂️ Мастер: {master_name}\n"
@@ -751,9 +962,47 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
             draft.time,
             )
         if taken:
-            await tg_edit(chat_id, message_id, "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз:", reply_markup=times_kb())
-            return
+            draft.time = None
+            msg = await tg_send(
+                chat_id,
+                "⚠️ Бұл уақыт бос емес екен. Басқа уақыт таңдаңыз."
+                )
 
+            asyncio.create_task(
+                delete_later(chat_id, msg["result"]["message_id"])
+                )
+            
+            available_times = await asyncio.to_thread(
+                get_available_times_for_day,
+                draft.salon_id,
+                draft.master_id,
+                draft.day
+                )
+            if not available_times:
+                try:
+                    await tg_edit(
+                        chat_id,
+                        draft.main_message_id or message_id,
+                        "Бұл күнге бос уақыт қалмады.",
+                        reply_markup=days_kb(draft.salon_id, draft.master_id)
+                        )
+                except Exception as e:
+                    if "message is not modified" not in str(e):
+                        raise
+
+            try:
+                await tg_edit(
+                    chat_id,
+                    draft.main_message_id or message_id,
+                    "Уақытты қайта таңдаңыз:",
+                    reply_markup=times_kb(available_times)
+                    )
+            except Exception as e:
+                if "message is not modified" not in str(e):
+                    raise
+                   
+            return
+        
         booking_id = await asyncio.to_thread(
                 insert_booking,
                 chat_id,
@@ -825,12 +1074,32 @@ async def handle_callback(chat_id: int, data: str, message_id: int):
 
         clear_booking_fields(chat_id)
         return
-    
     if data == "confirm:no":
-        await tg_edit(chat_id, message_id, "❌ Болдырылмады. Уақытты қайта таңдаңыз:", reply_markup=times_kb())
         draft.time = None
-        return
 
+        available_times = await asyncio.to_thread(
+            get_available_times_for_day,
+            draft.salon_id,
+            draft.master_id,
+            draft.day
+            )
+
+        if not available_times:
+            await tg_edit(
+                chat_id,
+                message_id,
+                "Бұл күнге бос уақыт қалмады.",
+                reply_markup=days_kb(draft.salon_id, draft.master_id)
+                )
+            return
+
+        await tg_edit(
+            chat_id,
+            message_id,
+            "❌ Болдырылмады. Уақытты қайта таңдаңыз:",
+            reply_markup=times_kb(available_times)
+            )   
+        return
     # ----------------------------
     # FALLBACK
     # ----------------------------
