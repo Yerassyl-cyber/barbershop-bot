@@ -11,7 +11,7 @@ from .db import (
     get_active_salons,
     insert_booking,
     is_slot_closed,
-    is_slot_taken,
+    is_slot_taken,ping_db,
     set_booking_calendar_event_id, add_closed_slot,
     get_user_active_bookings,get_active_bookings_by_salon_and_day,
     get_booking_for_cancel,remove_closed_day,

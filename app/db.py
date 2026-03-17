@@ -6,16 +6,45 @@ from .config import SQL_CONN_STR
 def get_conn():
     if not SQL_CONN_STR:
         raise RuntimeError("SQL_CONN_STR орнатылмаған (Azure App Settings)")
-    return pyodbc.connect(SQL_CONN_STR)
+    return pyodbc.connect(SQL_CONN_STR,timeout=60)
+import time
+
+def run_db(query, params=(), fetchone=False, fetchall=False, commit=False):
+    last_error = None
+
+    for attempt in range(3):
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(query, params)
+
+                if commit:
+                    conn.commit()
+
+                if fetchone:
+                    return cur.fetchone()
+
+                if fetchall:
+                    return cur.fetchall()
+
+                return None
+
+        except pyodbc.Error as e:
+            last_error = e
+            print(f"DB attempt {attempt + 1} failed: {e}")
+            time.sleep(5 * (attempt + 1))
+
+    raise last_error
+    
+def ping_db():
+    return run_db("SELECT 1", fetchone=True)
 
 def add_closed_slot(salon_id: int, master_id: str | None, day: str, time: str):
     sql = """
     INSERT INTO dbo.closed_slots (salon_id, master_id, day, time)
     VALUES (?, ?, ?, ?)
     """
-    with get_conn() as conn:
-        conn.execute(sql, salon_id, master_id, day, time)
-        conn.commit()
+    run_db(sql, (salon_id, master_id, day, time), commit=True)
 
 def remove_closed_slot(salon_id: int, master_id: str | None, day: str, time: str):
     sql = """
@@ -25,9 +54,7 @@ def remove_closed_slot(salon_id: int, master_id: str | None, day: str, time: str
       AND time = ?
       AND (master_id = ? OR (? IS NULL AND master_id IS NULL))
     """
-    with get_conn() as conn:
-        conn.execute(sql, salon_id, day, time, master_id, master_id)
-        conn.commit()
+    run_db(sql, (salon_id, day, time, master_id, master_id), commit=True)
         
 def get_active_salons():
     sql = """
@@ -36,8 +63,7 @@ def get_active_salons():
     WHERE is_active = 1
     ORDER BY id
     """
-    with get_conn() as conn:
-        return conn.execute(sql).fetchall()
+    return run_db(sql, fetchall=True)
 
 def is_slot_closed(salon_id: int, master_id: str, day: str, time: str) -> bool:
     sql = """
@@ -48,9 +74,8 @@ def is_slot_closed(salon_id: int, master_id: str, day: str, time: str) -> bool:
       AND time = ?
       AND (master_id = ? OR master_id IS NULL)
     """
-    with get_conn() as conn:
-        row = conn.execute(sql, salon_id, day, time, master_id).fetchone()
-        return bool(row)
+    row = run_db(sql, (salon_id, day, time, master_id), fetchone=True)
+    return bool(row)
     
 def init_db():
     with get_conn() as conn:
@@ -191,16 +216,15 @@ def init_db():
         """)
 
         conn.commit()
+        
 def get_closed_days(salon_id: int):
     sql = """
     SELECT day
     FROM dbo.closed_days
     WHERE salon_id = ?
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        rows = cur.execute(sql, salon_id).fetchall()
-        return [str(r[0]) for r in rows]
+    rows = run_db(sql, (salon_id,), fetchall=True)
+    return [str(r[0]) for r in rows]
 
 
 def add_closed_day(salon_id: int, day: str, note: str | None = None):
@@ -215,20 +239,15 @@ def add_closed_day(salon_id: int, day: str, note: str | None = None):
         VALUES (?, ?, ?)
     END
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, salon_id, day, salon_id, day, note)
-        conn.commit()
+    run_db(sql, (salon_id, day, salon_id, day, note), commit=True)
         
 def remove_closed_day(salon_id: int, day: str):
     sql = """
     DELETE FROM dbo.closed_days
     WHERE salon_id = ? AND day = ?
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, salon_id, day)
-        conn.commit()
+    run_db(sql, (salon_id, day), commit=True)
+    
 def get_active_bookings_by_salon_and_day(salon_id: int, day: str):
     sql = """
     SELECT
@@ -254,48 +273,42 @@ def get_active_bookings_by_salon_and_day(salon_id: int, day: str):
       AND b.status IN ('pending', 'approved')
     ORDER BY b.time
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        return cur.execute(sql, salon_id, day).fetchall()
-    
+    return run_db(sql, (salon_id, day), fetchall=True)
+
 def get_salon_admin_chat_id(salon_id: int) -> Optional[int]:
     sql = "SELECT admin_chat_id FROM dbo.salons WHERE id = ?"
-    with get_conn() as conn:
-        cur = conn.cursor()
-        row = cur.execute(sql, salon_id).fetchone()
-        if not row or row[0] is None:
-            return None
-        return int(row[0])
-
+    row = run_db(sql, (salon_id,), fetchone=True)
+    if not row or row[0] is None:
+        return None
+    return int(row[0])
 
 def get_salon_by_start_code(start_code: str):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, name FROM dbo.salons WHERE start_code = ? AND is_active = 1",
-            (start_code,)
-        )
-        return cur.fetchone()
+    sql = """
+    SELECT id, name
+    FROM dbo.salons
+    WHERE start_code = ? AND is_active = 1
+    """
+    return run_db(sql, (start_code,), fetchone=True)
 
 
 def get_masters_by_salon(salon_id: int):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, name FROM dbo.masters WHERE salon_id = ? AND is_active = 1 ORDER BY id",
-            (salon_id,)
-        )
-        return cur.fetchall()
+    sql = """
+    SELECT id, name
+    FROM dbo.masters
+    WHERE salon_id = ? AND is_active = 1
+    ORDER BY id
+    """
+    return run_db(sql, (salon_id,), fetchall=True)
 
 
 def get_services_by_salon(salon_id: int):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, title, price FROM dbo.services WHERE salon_id = ? AND is_active = 1 ORDER BY id",
-            (salon_id,)
-        )
-        return cur.fetchall()
+    sql = """
+    SELECT id, title, price
+    FROM dbo.services
+    WHERE salon_id = ? AND is_active = 1
+    ORDER BY id
+    """
+    return run_db(sql, (salon_id,), fetchall=True)
 
 
 def insert_booking(
@@ -316,10 +329,9 @@ def insert_booking(
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?);
     """
 
-    with get_conn() as conn:
-        cur = conn.cursor()
-        row = cur.execute(
-            sql,
+    row = run_db(
+        sql,
+        (
             user_chat_id,
             salon_id,
             master_id,
@@ -329,9 +341,11 @@ def insert_booking(
             price,
             client_phone,
             client_name
-        ).fetchone()
-        conn.commit()
-        return int(row[0])
+        ),
+        fetchone=True,
+        commit=True
+    )
+    return int(row[0])
 
         
 
@@ -350,21 +364,16 @@ def is_slot_taken(
       AND time = ?
       AND status IN ('pending', 'approved')
     """
+    row = run_db(sql, (salon_id, master_id, day, time), fetchone=True)
+    return row is not None
 
-    with get_conn() as conn:
-        cur = conn.cursor()
-        row = cur.execute(sql, salon_id, master_id, day, time).fetchone()
-        return row is not None
 def set_booking_calendar_event_id(booking_id: int, calendar_event_id: str):
     sql = """
     UPDATE dbo.bookings
     SET calendar_event_id = ?
     WHERE id = ?
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, calendar_event_id, booking_id)
-        conn.commit()
+    run_db(sql, (calendar_event_id, booking_id), commit=True)
 
 
 def get_booking_for_cancel(booking_id: int):
@@ -373,10 +382,7 @@ def get_booking_for_cancel(booking_id: int):
     FROM dbo.bookings
     WHERE id = ?
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        row = cur.execute(sql, booking_id).fetchone()
-        return row
+    return run_db(sql, (booking_id,), fetchone=True)
 
 def get_user_active_bookings(user_chat_id: int):
     sql = """
@@ -400,10 +406,7 @@ def get_user_active_bookings(user_chat_id: int):
     ORDER BY b.day, b.time
     """
 
-    with get_conn() as conn:
-        cur = conn.cursor()
-        rows = cur.execute(sql, user_chat_id).fetchall()
-        return rows
+    return run_db(sql, (user_chat_id,), fetchall=True)
     
 def cancel_booking(booking_id: int):
     sql = """
@@ -412,11 +415,7 @@ def cancel_booking(booking_id: int):
     WHERE id = ?
       AND status <> 'cancelled'
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, booking_id)
-        conn.commit()
-
+    run_db(sql, (booking_id,), commit=True)
 
 def get_booking_full_info(booking_id: int):
     sql = """
@@ -442,11 +441,7 @@ def get_booking_full_info(booking_id: int):
        AND s.salon_id = b.salon_id
     WHERE b.id = ?
     """
-    with get_conn() as conn:
-        cur = conn.cursor()
-        row = cur.execute(sql, booking_id).fetchone()
-        return row
-
+    return run_db(sql, (booking_id,), fetchone=True)
 if __name__ == "__main__":
     init_db()
     print("Database structure дайын ✅")
